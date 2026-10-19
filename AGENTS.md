@@ -1,9 +1,9 @@
 # Pravila projekta
 
 ## Projekt
-- Naziv: (upiši)
-- Zajednica: (upiši, npr. kafić "Kod Šime")
-- Opis: (jedna rečenica: što aplikacija radi i za koga)
+- Naziv: DiplomaChain
+- Zajednica: Fakulteti
+- Opis: DiplomaChain je Web3 aplikacija koja fakultetima omogućuje izdavanje digitalnih diploma na blockchainu, a ostalim korisnicima brzu i jednostavnu provjeru njihove autentičnosti.
 
 ## Stack (koristi točno ove verzije)
 - Frontend: Vue 3 (script setup), Pinia, Vite, u mapi frontend/

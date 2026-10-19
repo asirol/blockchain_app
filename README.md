@@ -4,7 +4,7 @@ DiplomaChain je Web3 aplikacija za fakultete koja izdaje digitalne diplome na Se
 
 ## Frontend
 
-Frontend se nalazi u [frontend/](./frontend/) i koristi Vue 3, Vite, Pinia i Tailwind CSS. Trenutna verzija uključuje dashboard fakulteta, pregled diploma, formu za izdavanje diplome te provjeru diploma pomoću njihovog ID-a.
+Frontend se nalazi u [frontend/](./frontend/) i koristi Vue 3, Vite, Pinia i Tailwind CSS. Trenutna verzija uključuje dva profila: profil Fakultet s mogućnošću izdavanja i pregleda diploma te profil Korisnik koji može samo pretraživati i provjeravati diplome pomoću njihovog ID-a.
 
 ### Pokretanje
 
