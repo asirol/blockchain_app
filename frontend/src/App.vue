@@ -1,8 +1,10 @@
 ﻿<script setup>
 import { computed, ref } from 'vue'
 import { useDiplomaStore } from './stores/diploma'
+import { useWalletStore } from './stores/wallet'
 
 const store = useDiplomaStore()
+const wallet = useWalletStore()
 const activeView = ref('Pregled')
 const showIssueModal = ref(false)
 const verificationId = ref('')
@@ -12,6 +14,12 @@ const showProfileMenu = ref(false)
 const showAllDiplomas = ref(false)
 const networkPeriod = ref('6m')
 const isFaculty = computed(() => store.isFaculty)
+const showWalletPanel = ref(false)
+const transactionSent = ref(false)
+const transactionForm = ref({
+  recipient: wallet.defaultRecipientAddress,
+  amount: wallet.defaultAmountEth,
+})
 
 const facultyNavItems = [
   { label: 'Pregled', icon: 'grid' },
@@ -114,6 +122,25 @@ function switchProfile(profile) {
   verificationId.value = ''
   showProfileMenu.value = false
 }
+
+async function connectWallet() {
+  showWalletPanel.value = true
+  await wallet.connect()
+}
+
+async function sendDemoTransaction() {
+  transactionSent.value = false
+  const recipient = transactionForm.value.recipient.trim()
+  const amount = transactionForm.value.amount.trim()
+  try {
+    await wallet.sendDemoTransaction(recipient, amount)
+    transactionSent.value = true
+  } catch (transactionError) {
+    wallet.error = transactionError.message || 'Slanje transakcije nije uspjelo.'
+    transactionSent.value = false
+  }
+}
+
 </script>
 
 <template>
@@ -148,6 +175,10 @@ function switchProfile(profile) {
           <span>Radni prostor</span><span>/</span><span class="font-semibold text-[#3d3b5b]">{{ activeView }}</span>
         </div>
         <div class="ml-auto flex items-center gap-5">
+          <button @click="wallet.isConnected ? showWalletPanel = !showWalletPanel : connectWallet()" :disabled="wallet.isConnecting" class="flex items-center gap-2 rounded-xl border border-[#e5e2f5] bg-[#faf9ff] px-3 py-2 text-xs font-bold text-[#604bc9] transition hover:border-[#c9c0f5] disabled:cursor-wait disabled:opacity-60">
+            <span class="h-2 w-2 rounded-full" :class="wallet.isConnected && wallet.isSepolia ? 'bg-[#48b989]' : 'bg-[#d89244]'"></span>
+            {{ wallet.isConnecting ? 'Čekanje MetaMaska...' : (wallet.isConnected ? wallet.shortAccount : 'Poveži MetaMask') }}
+          </button>
           <div class="relative border-l border-[#eeeef5] pl-5">
             <button @click="showProfileMenu = !showProfileMenu" class="flex items-center gap-2">
               <div class="grid h-8 w-8 place-items-center rounded-full bg-[#f1e9ff] text-xs font-bold text-[#785fcf]">{{ isFaculty ? 'FA' : 'KO' }}</div>
@@ -162,6 +193,32 @@ function switchProfile(profile) {
           </div>
         </div>
       </header>
+
+      <div v-if="showWalletPanel" class="border-b border-[#e9e7f2] bg-[#fbfaff] px-6 py-4 sm:px-10">
+        <div class="mx-auto flex max-w-[1320px] flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8877d3]">MetaMask wallet</p>
+            <p class="mt-1 text-xs text-[#5b5973]">Račun: <span class="font-mono">{{ wallet.account }}</span></p>
+            <p class="mt-1 text-xs" :class="wallet.isSepolia ? 'text-[#328861]' : 'text-[#b85d73]'">
+              {{ wallet.isSepolia ? 'Povezano na Sepolia testnu mrežu.' : 'Odaberite Sepolia mrežu u MetaMasku.' }}
+            </p>
+          </div>
+          <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+            <div class="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[280px]">
+              <input v-model.trim="transactionForm.recipient" autocomplete="off" aria-label="Adresa primatelja" placeholder="0x... adresa primatelja" class="rounded-lg border border-[#e5e2f5] bg-white px-3 py-2 text-xs font-mono text-[#4a4864] outline-none focus:border-[#8d7ce2]" />
+              <input v-model.trim="transactionForm.amount" autocomplete="off" aria-label="Iznos u Sepolia ETH" inputmode="decimal" placeholder="Iznos u Sepolia ETH" class="rounded-lg border border-[#e5e2f5] bg-white px-3 py-2 text-xs text-[#4a4864] outline-none focus:border-[#8d7ce2]" />
+              <p class="text-[10px] text-[#77768d]">Šalje se: <span class="font-mono">{{ transactionForm.recipient }}</span> · {{ transactionForm.amount }} Sepolia ETH</p>
+            </div>
+            <a v-if="!wallet.isInstalled" href="https://metamask.io/download/" target="_blank" rel="noreferrer" class="rounded-xl bg-[#6b55d9] px-4 py-3 text-xs font-bold text-white shadow-lilac transition hover:bg-[#5942c4]">Instaliraj MetaMask</a>
+            <button v-else @click="sendDemoTransaction" :disabled="wallet.isSending || !wallet.isSepolia" class="rounded-xl bg-[#6b55d9] px-4 py-3 text-xs font-bold text-white shadow-lilac transition hover:bg-[#5942c4] disabled:cursor-not-allowed disabled:opacity-50">
+              {{ wallet.isSending ? 'Čekanje potvrde...' : 'Pošalji demo transakciju' }}
+            </button>
+            <a v-if="wallet.lastTransactionHash" :href="`https://sepolia.etherscan.io/tx/${wallet.lastTransactionHash}`" target="_blank" rel="noreferrer" class="text-xs font-bold text-[#6b55d9]">Otvori na Etherscanu ↗</a>
+          </div>
+        </div>
+        <p v-if="transactionSent" class="mx-auto mt-3 max-w-[1320px] text-xs font-semibold text-[#328861]">Transakcija je poslana na Sepolia mrežu.</p>
+        <p v-if="wallet.error" class="mx-auto mt-3 max-w-[1320px] text-xs font-semibold text-[#b85d73]">{{ wallet.error }}</p>
+      </div>
 
       <template v-if="isFaculty">
       <div class="mx-auto max-w-[1320px] px-5 py-8 sm:px-10 lg:px-14">
