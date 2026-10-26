@@ -18,4 +18,4 @@ Na frontedu napravi mogućnost spajanja sa metamask walletom (svojim koji imam) 
 - Što je AI napravio drugačije nego što sam očekivao: Podaci transakcije se nisu mogli mijenjati (iznos i račun), odnosno mogla sam slati samo defaultno postavljeni iznos sa vlastitog na vlastiti račun. To je popravljeno kroz dodatne promtove. 
 - Što sam dodao u AGENTS.md: Danas ništa
 - Provjera: Poslala sam 0.01 SepoliaETH na račun kolegice. 
-- Commit: 
+- Commit: 84e1ee8526720ff8acb4060c7d07f1d2183fcbcc
