@@ -25,6 +25,51 @@ testnoj mreži i javnu provjeru njihove autentičnosti.
 
 ## Funkcije ugovora
 
+### Precizni ABI potpisi i događaji
+
+Ugovor se sastoji od sučelja `IDiplomaChainToken` i
+`IDiplomaChainModul`. Oba sučelja koriste Solidity pragma verziju
+`^0.8.24`.
+
+#### Modul diploma
+
+- `issueDiploma(string studentName, string studyName, uint256 issueDate, bytes32 pdfHash)`
+  vraća `uint256 diplomaId`.
+- `getDiploma(uint256 diplomaId)` vraća
+  `(string studentName, string studyName, uint256 issueDate, bytes32 pdfHash)`.
+- `nextDiplomaId()` vraća `uint256`.
+- `nextDiplomaId` počinje od `1`, povećava se nakon svakog uspješnog
+  izdavanja i nikad se ne smanjuje niti reciklira.
+- `DiplomaIssued(uint256 indexed diplomaId, string studentName,
+  string studyName, uint256 issueDate, bytes32 pdfHash)` emitira se nakon
+  uspješnog izdavanja diplome.
+
+#### Vlasništvo
+
+- `owner()` vraća `address` trenutnog vlasnika.
+- `transferOwnership(address newOwner)` ne vraća vrijednost.
+- Nakon uspješnog prijenosa emitira se
+  `OwnershipTransferred(address indexed previousOwner,
+  address indexed newOwner)`.
+- Događaj `OwnershipTransferred` dio je i token sučelja i modula diploma.
+
+#### Token
+
+`IDiplomaChainToken` izlaže sljedeće funkcije:
+
+- `owner()` vraća `address`.
+- `transferOwnership(address newOwner)` ne vraća vrijednost.
+- `totalSupply()` vraća `uint256`.
+- `balanceOf(address account)` vraća `uint256`.
+- `decimals()` vraća `uint8`.
+- `transfer(address to, uint256 amount)` vraća `bool`.
+- `burn(uint256 amount)` ne vraća vrijednost.
+
+Token sučelje emitira standardni događaj
+`Transfer(address indexed from, address indexed to, uint256 value)` i
+događaj `OwnershipTransferred` naveden u odjeljku o vlasništvu.
+Funkcije `approve` i `transferFrom` nisu dio ovog sučelja ni ABI-ja ugovora.
+
 ### Modul diploma
 
 - `issueDiploma` automatski generira sljedeći ID iz brojača
@@ -312,3 +357,30 @@ mreži s chain ID-em `11155111`. Aplikacija ne podržava mainnet ni druge mreže
 - **Tada** payload ne sadrži sirovi PDF ni privatne ključeve, a dokumentirano
   je da se tvrdnja ne odnosi automatski na RPC providera, browser ili
   korisnički novčanik.
+
+## Sljedivost
+
+| Funkcija | Kriteriji |
+|---|---|
+| `issueDiploma(string,string,uint256,bytes32) returns (uint256)` | K1 — uspješno izdavanje; K2 — validacija podataka i duplikata; K3 — pristup samo vlasniku; K10 — ovlasti i revizija; K11 — brojač i prijenos vlasništva |
+| `DiplomaIssued(uint256 indexed,string,string,uint256,bytes32)` | K1 — uspješno izdavanje; K10 — događaj za reviziju |
+| `getDiploma(uint256) returns (string,string,uint256,bytes32)` | K4 — postojeća diploma; K5 — nepostojeći ID; K6 — javna provjera bez novčanika |
+| `nextDiplomaId() returns (uint256)` | K1 — početna vrijednost i povećanje; K2 — neuspješno izdavanje ne mijenja stanje; K11 — gornja granica brojača |
+| `owner() returns (address)` | K3 — trenutni vlasnik i ovlasti; K10 — on-chain identitet administratora; K11 — stanje nakon prijenosa |
+| `transferOwnership(address)` | K3 — samo vlasnik; K10 — administrativna ovlast; K11 — validacija i promjena vlasništva |
+| `OwnershipTransferred(address indexed,address indexed)` | K3 — prijenos vlasništva; K10 — provjerljiv događaj; K11 — potvrda novog vlasnika |
+| `totalSupply() returns (uint256)` | K6 — prikaz tokena; K9 — nepromjenjiva ukupna količina; K12 — početna količina tokena |
+| `balanceOf(address) returns (uint256)` | K6 — prikaz salda vlasnika; K9 — provjera salda prije token-radnje; K12 — početni saldo |
+| `decimals() returns (uint8)` | K12 — 18 decimala |
+| `transfer(address,uint256) returns (bool)` | K7 — prijenos tokena; K9 — rubni slučajevi transfera; K12 — ažuriranje salda |
+| `burn(uint256)` | K8 — spaljivanje vlastitih tokena; K9 — saldo i rubni slučajevi burna; K12 — promjena `totalSupply` |
+| `Transfer(address indexed,address indexed,uint256)` | K7 — revizija prijenosa; K8 — revizija spaljivanja; K9 — promjena salda i ukupne količine |
+
+Kriteriji K1–K12 u ovoj tablici pokrivaju, redom: izdavanje diplome,
+validaciju diplome, vlasništvo i pristup, provjeru postojeće diplome,
+ponašanje za nepostojeći ID, javnu provjeru i prikaz tokena, transfer tokena,
+burn tokena, ERC-20 rubne slučajeve, administratorsku reviziju, brojač i
+prijenos vlasništva te početne token-količine i decimale. Mrežna ograničenja,
+ponašanje MetaMaska i read-only RPC-a provjeravaju se na razini aplikacije,
+dok je njihova on-chain funkcionalna točka u ovoj tablici navedena uz
+odgovarajuću funkciju.
