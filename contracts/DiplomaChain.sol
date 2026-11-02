@@ -38,7 +38,7 @@ contract DiplomaChain is
     function owner()
         public
         view
-        override(Ownable, IDiplomaChainToken, IDiplomaChainModul)
+        override(Ownable, IDiplomaChainToken)
         returns (address)
     {
         return Ownable.owner();
@@ -47,7 +47,7 @@ contract DiplomaChain is
     // K3, K10, K11.
     function transferOwnership(address newOwner)
         public
-        override(Ownable, IDiplomaChainToken, IDiplomaChainModul)
+        override(Ownable, IDiplomaChainToken)
     {
         require(
             msg.sender == owner(),

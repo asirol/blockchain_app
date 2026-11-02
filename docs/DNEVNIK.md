@@ -35,8 +35,8 @@ greške za neuspješne slučajeve. Ne piši kod.
 - Što je AI napravio dobro: Sve što sam tražila je napisao u SPEC. 
 - Što je AI napravio drugačije nego što sam očekivao: Bilo je nekoliko nedosljednosti koje sam morala ispravljati u SPEC i nije implementirao moj modul kada je radio interface i contract. 
 - Što sam dodao u AGENTS.md: Danas ništa
-- Provjera: Prošla sam kroz specifikaciju i provjerila je li sve onako kako želim. 
-- Commit: 76e602da8c21a724831e8b218ccd0bcdb7cd6014
+- Provjera: Prošla sam kroz specifikaciju i provjerila je li sve točno. 
+- Commit: 
 
 NALAZ | ODLUKA | OBRAZLOŽENJE
 1. Nisu definirana pravila za prazno ime, prazan studij, prazan hash, predugačke stringove, nevažeći datum ili budući datum. Vlasnik može izdati formalno neupotrebljivu diplomu. | Prihvaćeno | Za svaki ulaz definirati validaciju: prazne vrijednosti, maksimalne duljine, format/hash duljinu i dopušteni raspon datuma, uz zaseban neuspješan test.

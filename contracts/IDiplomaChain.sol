@@ -48,9 +48,4 @@ interface IDiplomaChainModul {
     // Uloga: bilo koji korisnik; SPEC: K1, K11.
     function nextDiplomaId() external view returns (uint256);
 
-    // Uloga: fakultet (trenutni vlasnik); SPEC: K3, K10, K11.
-    function owner() external view returns (address);
-
-    // Uloga: fakultet (trenutni vlasnik); SPEC: K3, K10, K11.
-    function transferOwnership(address newOwner) external;
 }
