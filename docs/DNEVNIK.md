@@ -19,3 +19,13 @@ Na frontedu napravi mogućnost spajanja sa metamask walletom (svojim koji imam) 
 - Što sam dodao u AGENTS.md: Danas ništa
 - Provjera: Poslala sam 0.01 SepoliaETH na račun kolegice. 
 - Commit: 84e1ee8526720ff8acb4060c7d07f1d2183fcbcc
+
+## T3 — Specifikacija prije koda (2.11.2026.)
+- Cilj termina: Napisati specifikaciju svog tokena i modula koja je dovoljno precizna da AI iz nje može napisati pametni ugovor bez nagađanja.
+- Najkorisniji prompt (kopiran u cijelosti):
+
+- Što je AI napravio dobro: 
+- Što je AI napravio drugačije nego što sam očekivao: 
+- Što sam dodao u AGENTS.md: Danas ništa
+- Provjera: 
+- Commit: 
