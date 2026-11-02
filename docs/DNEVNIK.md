@@ -23,9 +23,24 @@ Na frontedu napravi mogućnost spajanja sa metamask walletom (svojim koji imam) 
 ## T3 — Specifikacija prije koda (2.11.2026.)
 - Cilj termina: Napisati specifikaciju svog tokena i modula koja je dovoljno precizna da AI iz nje može napisati pametni ugovor bez nagađanja.
 - Najkorisniji prompt (kopiran u cijelosti):
-
-- Što je AI napravio dobro: 
-- Što je AI napravio drugačije nego što sam očekivao: 
+Ponašaj se kao poslovni analitičar za blockchain aplikacije. Gradim: 
+Web3 aplikacija koja omogućuje fakultetu izdavanje digitalnih diploma na blockchainu, a studentima i poslodavcima provjeru autentičnosti tih diploma
+Aplikacija ima token zajednice (ERC-20) i modul: provjera autentičnosti diploma.
+Postavljaj mi pitanja jedno po jedno (najviše 12) dok ne dobiješ odgovor na svako pitanje
+iz popisa odluka u nastavku. Ne predlaži funkcionalnosti koje nisam spomenuo; ako misliš
+da nešto nedostaje, pitaj me.
+Kad završimo, popuni docs/SPEC.md prema predlošku u toj datoteci.
+Kriterije prihvaćanja piši isključivo u obliku Zadano / Kada / Tada, s točnom porukom
+greške za neuspješne slučajeve. Ne piši kod.
+- Što je AI napravio dobro: Sve što sam tražila je napisao u SPEC. 
+- Što je AI napravio drugačije nego što sam očekivao: Bilo je nekoliko nedosljednosti koje sam morala ispravljati u SPEC. 
 - Što sam dodao u AGENTS.md: Danas ništa
-- Provjera: 
+- Provjera: Prošla sam kroz specifikaciju i provjerila je li sve onako kako želim. 
 - Commit: 
+
+NALAZ | ODLUKA | OBRAZLOŽENJE
+1. Nisu definirana pravila za prazno ime, prazan studij, prazan hash, predugačke stringove, nevažeći datum ili budući datum. Vlasnik može izdati formalno neupotrebljivu diplomu. | Prihvaćeno | Za svaki ulaz definirati validaciju: prazne vrijednosti, maksimalne duljine, format/hash duljinu i dopušteni raspon datuma, uz zaseban neuspješan test.
+2. Svaka osoba koja zna ID može dobiti osobne podatke studenta. Specifikacija ne razmatra privatnost, curenje podataka ni mogućnost pogađanja sekvencijalnih ID-jeva. | Prihvaćeno | Kada se izda diploma i bilo koja osoba pozove getDiploma za ID-jeve 1 do nextDiplomaId - 1. Tada je očekivano javno otkrivanje podataka izričito potvrđeno ili je pristup ograničen.
+3. Poruka tvrdi da je diploma „važeća” i „autentična”, iako se provjerava samo postojanje ID-a, bez PDF-a, potpisa ili statusa opoziva. Bilo koji postojeći zapis može biti označen autentičnim. | Odbijeno | Ako postoji, znači da je autentična jer se zapis ne može mijenjati.
+4. Nije definirano ponašanje kada brojač dosegne maksimalnu vrijednost tipa. Također nije definirano treba li se brojač povećati ako transakcija ne uspije. | Prijvaćeno | Kada izdavanje ne uspije zbog bilo kojeg razloga. Tada se stanje brojača i mapa diploma ne mijenja. Definirati ponašanje pri maksimalnoj vrijednosti brojača.
+5. Vlasnik može prenijeti vlasništvo na nedostupnu ili kompromitiranu adresu, nakon čega više nema legitimnog načina upravljanja. Nema potvrde primatelja ni recovery postupka. | Prihvaćeno. | Kada vlasnik prenese vlasništvo. Tada mora biti emitiran provjerljiv događaj, nova adresa mora biti jasno potvrđena, a specifikacija mora definirati postoji li recovery ili je gubitak trajni.
