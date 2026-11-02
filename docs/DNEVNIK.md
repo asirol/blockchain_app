@@ -33,7 +33,7 @@ Kad završimo, popuni docs/SPEC.md prema predlošku u toj datoteci.
 Kriterije prihvaćanja piši isključivo u obliku Zadano / Kada / Tada, s točnom porukom
 greške za neuspješne slučajeve. Ne piši kod.
 - Što je AI napravio dobro: Sve što sam tražila je napisao u SPEC. 
-- Što je AI napravio drugačije nego što sam očekivao: Bilo je nekoliko nedosljednosti koje sam morala ispravljati u SPEC. 
+- Što je AI napravio drugačije nego što sam očekivao: Bilo je nekoliko nedosljednosti koje sam morala ispravljati u SPEC i nije implementirao moj modul kada je radio interface i contract. 
 - Što sam dodao u AGENTS.md: Danas ništa
 - Provjera: Prošla sam kroz specifikaciju i provjerila je li sve onako kako želim. 
 - Commit: 
@@ -44,3 +44,9 @@ NALAZ | ODLUKA | OBRAZLOŽENJE
 3. Poruka tvrdi da je diploma „važeća” i „autentična”, iako se provjerava samo postojanje ID-a, bez PDF-a, potpisa ili statusa opoziva. Bilo koji postojeći zapis može biti označen autentičnim. | Odbijeno | Ako postoji, znači da je autentična jer se zapis ne može mijenjati.
 4. Nije definirano ponašanje kada brojač dosegne maksimalnu vrijednost tipa. Također nije definirano treba li se brojač povećati ako transakcija ne uspije. | Prijvaćeno | Kada izdavanje ne uspije zbog bilo kojeg razloga. Tada se stanje brojača i mapa diploma ne mijenja. Definirati ponašanje pri maksimalnoj vrijednosti brojača.
 5. Vlasnik može prenijeti vlasništvo na nedostupnu ili kompromitiranu adresu, nakon čega više nema legitimnog načina upravljanja. Nema potvrde primatelja ni recovery postupka. | Prihvaćeno. | Kada vlasnik prenese vlasništvo. Tada mora biti emitiran provjerljiv događaj, nova adresa mora biti jasno potvrđena, a specifikacija mora definirati postoji li recovery ili je gubitak trajni.
+
+| Kriterij | Što sam kliknuo | Očekivano | Dobiveno (poruka iz konzole) |
+|---|---|---|---|
+| K12 — decimale tokena | S računa vlasnika pozvao sam `decimals()` | `18` | `"18"` |
+| K3/K7 — ovlasti za transfer | S drugog računa pozvao sam `transfer()` | Poziv ne uspijeva uz poruku `"Pristup odbijen: samo vlasnik ugovora moze izvrsiti ovu radnju."` | `"Pristup odbijen: samo vlasnik ugovora moze izvrsiti ovu radnju."` |
+| K8/K9 — burn iznad salda | S računa vlasnika pozvao sam `burn()` s iznosom većim od salda | Poziv ne uspijeva uz poruku `"Nemate dovoljno tokena za spaljivanje."` | `"Nemate dovoljno tokena za spaljivanje."` |

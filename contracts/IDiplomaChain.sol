@@ -1,30 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-interface IDiplomaChainToken {
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+interface IDiplomaChainToken is IERC20 {
     // Uloga: fakultet (trenutni vlasnik); SPEC: K3, K10.
     function owner() external view returns (address);
 
     // Uloga: fakultet (trenutni vlasnik); SPEC: K3, K10, K11.
     function transferOwnership(address newOwner) external;
 
-    // Uloga: fakultet i javni citatelji; SPEC: K6, K12.
-    function totalSupply() external view returns (uint256);
-
-    // Uloga: fakultet; SPEC: K6, K9, K12.
-    function balanceOf(address account) external view returns (uint256);
-
     // Uloga: fakultet; SPEC: K6, K12.
     function decimals() external view returns (uint8);
-
-    // Uloga: fakultet (trenutni vlasnik); SPEC: K7, K9, K10, K12.
-    function transfer(address to, uint256 amount) external returns (bool);
 
     // Uloga: fakultet (trenutni vlasnik); SPEC: K8, K9, K12.
     function burn(uint256 amount) external;
@@ -37,10 +24,6 @@ interface IDiplomaChainModul {
         string studyName,
         uint256 issueDate,
         bytes32 pdfHash
-    );
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner
     );
 
     // Uloga: fakultet (trenutni vlasnik); SPEC: K1, K2, K3, K10, K11.

@@ -67,8 +67,20 @@ Ugovor se sastoji od sučelja `IDiplomaChainToken` i
 
 Token sučelje emitira standardni događaj
 `Transfer(address indexed from, address indexed to, uint256 value)` i
-događaj `OwnershipTransferred` naveden u odjeljku o vlasništvu.
-Funkcije `approve` i `transferFrom` nisu dio ovog sučelja ni ABI-ja ugovora.
+događaj `OwnershipTransferred` koji nasljeđuje OpenZeppelin `Ownable`.
+`IDiplomaChainToken` nasljeđuje OpenZeppelin sučelje `IERC20`, pa su
+`allowance`, `approve` i `transferFrom` dio sučelja i ABI-ja ugovora.
+Njihovo ponašanje je standardno OpenZeppelin ERC-20 ponašanje. Te funkcije
+nisu dio korisničkog sučelja aplikacije, ali postoje u ABI-ju.
+
+Ugovor tokena zove se `DiplomaChain` i nalazi se u datoteci
+`contracts/DiplomaChain.sol`. ERC-20 naziv tokena je `DiplomaChain`, a simbol
+tokena je `DPLC`.
+
+Sve funkcije deklarirane u `IDiplomaChainToken`, uključujući funkcije
+naslijeđene iz `IERC20`, moraju biti eksplicitno implementirane u
+`DiplomaChain`. Implementacije mogu delegirati standardno ponašanje
+OpenZeppelin baznim ugovorima.
 
 ### Modul diploma
 
@@ -107,6 +119,9 @@ Funkcije `approve` i `transferFrom` nisu dio ovog sučelja ni ABI-ja ugovora.
 - `mint` funkcija ne postoji; ukupna količina ne može se povećati.
 - ERC-20 prikaz salda, `transfer` i `burn(amount)` dostupni su samo fakultetu
   (vlasniku ugovora) uz povezan MetaMask na Sepolia mreži.
+- `transfer` ugovora tokena smije pozvati samo trenutni vlasnik. Poziv s druge
+  adrese ne uspijeva uz poruku:
+  `Pristup odbijen: samo vlasnik ugovora moze izvrsiti ovu radnju.`
 - `burn(amount)` spaljuje samo vlastite tokene fakulteta.
 - Pokušaj spaljivanja većeg iznosa od vlastitog salda ne uspijeva uz poruku:
   `Nemate dovoljno tokena za spaljivanje.`
@@ -114,6 +129,9 @@ Funkcije `approve` i `transferFrom` nisu dio ovog sučelja ni ABI-ja ugovora.
   tokena.
 - Governance glasovanje nije u opsegu ove verzije.
 - `approve` i `transferFrom` nisu dio korisničkog sučelja ove verzije.
+- `approve`, `allowance` i `transferFrom` postoje u ABI-ju zbog nasljeđivanja
+  OpenZeppelin `IERC20` sučelja. Njihovo standardno ERC-20 ponašanje nije
+  dodatno ograničeno pravilom vlasnika ugovora.
 
 ## Tko smije što
 
@@ -215,10 +233,15 @@ mreži s chain ID-em `11155111`. Aplikacija ne podržava mainnet ni druge mreže
 #### Pristup ERC-20 funkcijama
 
 - **Zadano** je da je pozivatelj adresa koja nije trenutni vlasnik ugovora.
-- **Kada** izravno pozove ERC-20 funkciju prikaza salda, `transfer`,
-  `burn`, `approve` ili `transferFrom`.
-- **Tada** poziv ne uspije ili funkcija ne postoji, prema stvarnom ABI-ju
-  ugovora, a ograničenje nije samo vizualno skrivanje funkcije u sučelju.
+- **Kada** izravno pozove `transfer` ili `burn`.
+- **Tada** poziv ne uspije uz odgovarajuću poruku o odbijenom pristupu, a
+  ograničenje nije samo vizualno skrivanje funkcije u sučelju.
+
+- **Zadano** je da bilo koji korisnik izravno pozove `balanceOf`, `allowance`,
+  `approve` ili `transferFrom`.
+- **Kada** poziv poštuje standardna pravila ERC-20 funkcije.
+- **Tada** funkcija primjenjuje standardno OpenZeppelin ERC-20 ponašanje i
+  nije ograničena vlasništvom ugovora.
 
 - **Zadano** je da trenutni vlasnik ugovora izvršava `transfer` na valjanu
   adresu.
@@ -227,17 +250,21 @@ mreži s chain ID-em `11155111`. Aplikacija ne podržava mainnet ni druge mreže
   pravilo o tome smije li primatelj dalje koristiti tokene mora biti
   jednako primijenjeno u ugovoru i sučelju.
 
-- **Zadano** je da su `approve` i `transferFrom` izvan korisničkog sučelja.
+- **Zadano** je da su `approve` i `transferFrom` izvan korisničkog sučelja,
+  ali postoje u ABI-ju zbog OpenZeppelin `IERC20` sučelja.
 - **Kada** se provjeri ABI ugovora i izravno pozovu te funkcije.
-- **Tada** one ne postoje ili su njihovo ponašanje, dozvole i kriteriji
-  prihvaćanja izričito definirani.
+- **Tada** primjenjuju standardno OpenZeppelin ERC-20 ponašanje i nisu
+  ograničene pravilom vlasnika ugovora.
 
 #### Prijenos vlasništva
 
 - **Zadano** je da vlasnik poziva `transferOwnership`.
 - **Kada** je `newOwner` nulta adresa, trenutni vlasnik ili adresa ugovora.
-- **Tada** ugovor odbija poziv s točnom porukom za nevažeću adresu ili je
-  dopušteno ponašanje izričito definirano i testirano za svaki slučaj.
+- **Tada** ugovor primjenjuje standardnu OpenZeppelin `Ownable` validaciju.
+  Nulta adresa uzrokuje standardnu custom grešku
+  `OwnableInvalidOwner(address)`. Ponašanje za adresu trenutnog vlasnika i
+  adresu ugovora jednako je standardnoj OpenZeppelin implementaciji i mora
+  biti pokriveno testovima.
 
 - **Zadano** je da je prijenos vlasništva uspješno potvrđen.
 - **Kada** se vlasništvo prenese na novu adresu.
@@ -362,6 +389,7 @@ mreži s chain ID-em `11155111`. Aplikacija ne podržava mainnet ni druge mreže
 
 | Funkcija | Kriteriji |
 |---|---|
+| konstruktor `DiplomaChain()` | K12 — početna količina tokena i početni saldo vlasnika |
 | `issueDiploma(string,string,uint256,bytes32) returns (uint256)` | K1 — uspješno izdavanje; K2 — validacija podataka i duplikata; K3 — pristup samo vlasniku; K10 — ovlasti i revizija; K11 — brojač i prijenos vlasništva |
 | `DiplomaIssued(uint256 indexed,string,string,uint256,bytes32)` | K1 — uspješno izdavanje; K10 — događaj za reviziju |
 | `getDiploma(uint256) returns (string,string,uint256,bytes32)` | K4 — postojeća diploma; K5 — nepostojeći ID; K6 — javna provjera bez novčanika |
@@ -371,6 +399,9 @@ mreži s chain ID-em `11155111`. Aplikacija ne podržava mainnet ni druge mreže
 | `OwnershipTransferred(address indexed,address indexed)` | K3 — prijenos vlasništva; K10 — provjerljiv događaj; K11 — potvrda novog vlasnika |
 | `totalSupply() returns (uint256)` | K6 — prikaz tokena; K9 — nepromjenjiva ukupna količina; K12 — početna količina tokena |
 | `balanceOf(address) returns (uint256)` | K6 — prikaz salda vlasnika; K9 — provjera salda prije token-radnje; K12 — početni saldo |
+| `allowance(address,address) returns (uint256)` | K6 — prikaz tokena; K9 — standardno ERC-20 ponašanje i rubni slučajevi |
+| `approve(address,uint256) returns (bool)` | K6 — token-radnje u ABI-ju; K9 — standardno ERC-20 ponašanje i rubni slučajevi |
+| `transferFrom(address,address,uint256) returns (bool)` | K6 — token-radnje u ABI-ju; K9 — standardno ERC-20 ponašanje i rubni slučajevi |
 | `decimals() returns (uint8)` | K12 — 18 decimala |
 | `transfer(address,uint256) returns (bool)` | K7 — prijenos tokena; K9 — rubni slučajevi transfera; K12 — ažuriranje salda |
 | `burn(uint256)` | K8 — spaljivanje vlastitih tokena; K9 — saldo i rubni slučajevi burna; K12 — promjena `totalSupply` |
