@@ -22,6 +22,8 @@ testnoj mreži i javnu provjeru njihove autentičnosti.
 - Provjera ne zahtijeva novčanik, prijavu ni registraciju.
 - Ne mogu izvršavati ERC-20 radnje i za njih se u sučelju ne prikazuju
   funkcije prikaza salda, transfera ni burnanja.
+- Mogu biti primatelji tokena na blockchainu, ali aplikacija im ne daje
+  korisničko sučelje za slanje, primanje ili upravljanje tokenima.
 
 ## Funkcije ugovora
 
@@ -119,6 +121,12 @@ OpenZeppelin baznim ugovorima.
 - `mint` funkcija ne postoji; ukupna količina ne može se povećati.
 - ERC-20 prikaz salda, `transfer` i `burn(amount)` dostupni su samo fakultetu
   (vlasniku ugovora) uz povezan MetaMask na Sepolia mreži.
+- Tokene može primiti svaka valjana, nenulta blockchain adresa, uključujući
+  ostale korisnike. Ne postoji posebno ograničenje broja tokena koje jedna
+  adresa smije primiti.
+- Najveći iznos jednog `transfer` poziva jednak je trenutačnom saldu
+  pošiljatelja. Za `transferFrom` vrijedi i ograničenje trenutačnog
+  odobrenja (`allowance`). Ne postoji dodatni limit po transakciji.
 - `transfer` ugovora tokena smije pozvati samo trenutni vlasnik. Poziv s druge
   adrese ne uspijeva uz poruku:
   `Pristup odbijen: samo vlasnik ugovora moze izvrsiti ovu radnju.`
@@ -132,6 +140,11 @@ OpenZeppelin baznim ugovorima.
 - `approve`, `allowance` i `transferFrom` postoje u ABI-ju zbog nasljeđivanja
   OpenZeppelin `IERC20` sučelja. Njihovo standardno ERC-20 ponašanje nije
   dodatno ograničeno pravilom vlasnika ugovora.
+- Član koji posjeduje tokene ne može ih poslati izravnim pozivom `transfer`,
+  jer je ta funkcija u ugovoru ograničena na vlasnika. Može odobriti
+  potrošača funkcijom `approve`, nakon čega odobreni potrošač može koristiti
+  `transferFrom`, prema standardnim pravilima ERC-20. Te radnje nisu
+  dostupne kroz korisničko sučelje.
 
 ## Tko smije što
 
@@ -156,6 +169,9 @@ mreži s chain ID-em `11155111`. Aplikacija ne podržava mainnet ni druge mreže
 - Sadržaj PDF-a; sprema se samo njegov hash.
 - Podaci za prijavu ili registraciju, jer te funkcionalnosti nisu podržane.
 - Privatni ključevi.
+- Aplikacija nema backend ni trajnu izvanlančanu bazu osobnih podataka.
+  Odabrani PDF može se privremeno držati u memoriji preglednika radi rada
+  sučelja, ali se ne šalje u ugovor i nije trajno pohranjen aplikacijom.
 
 ## Kriteriji prihvaćanja
 
@@ -247,8 +263,16 @@ mreži s chain ID-em `11155111`. Aplikacija ne podržava mainnet ni druge mreže
   adresu.
 - **Kada** potvrdi transakciju.
 - **Tada** saldo pošiljatelja i primatelja mijenja se za točan iznos, a
-  pravilo o tome smije li primatelj dalje koristiti tokene mora biti
-  jednako primijenjeno u ugovoru i sučelju.
+  primatelj može tokene dalje koristiti prema pravilima za `transfer`,
+  `approve` i `transferFrom`. Ne postoji dodatni limit po transakciji osim
+  salda pošiljatelja.
+
+- **Zadano** je da član ima tokene i želi ih poslati drugom članu.
+- **Kada** pokuša izravno pozvati `transfer`.
+- **Tada** poziv ne uspijeva jer je `transfer` ograničen na vlasnika. Ako
+  član prethodno pozove `approve` za potrošača, taj potrošač može izvršiti
+  `transferFrom` prema standardnim ERC-20 pravilima; to nije dostupno kroz
+  korisničko sučelje.
 
 - **Zadano** je da su `approve` i `transferFrom` izvan korisničkog sučelja,
   ali postoje u ABI-ju zbog OpenZeppelin `IERC20` sučelja.
@@ -270,8 +294,8 @@ mreži s chain ID-em `11155111`. Aplikacija ne podržava mainnet ni druge mreže
 - **Kada** se vlasništvo prenese na novu adresu.
 - **Tada** `owner()` vraća novu adresu, emitira se provjerljiv događaj,
   prethodni vlasnik više nema administratorske ovlasti, a specifikacija
-  izričito definira ostaje li saldo tokena na prethodnoj adresi ili se
-  prenosi na novu adresu.
+  potvrđuje da saldo tokena ostaje na prethodnoj adresi; prijenos vlasništva
+  sam po sebi ne prenosi tokene.
 
 - **Zadano** je da je vlasništvo preneseno na nedostupnu ili kompromitiranu
   adresu.
@@ -331,6 +355,23 @@ mreži s chain ID-em `11155111`. Aplikacija ne podržava mainnet ni druge mreže
 - **Tada** `decimals()` iznosi `18`, `totalSupply()` iznosi
   `1.000.000 * 10^18` najmanjih jedinica, a cijeli iznos pripada početnom
   vlasniku.
+
+- **Zadano** je da pošiljatelj ili odobreni potrošač šalje tokene.
+- **Kada** je iznos veći od salda pošiljatelja ili, kod `transferFrom`,
+  veći od odobrenja.
+- **Tada** standardna ERC-20 validacija odbija poziv, stanje se ne mijenja i
+  ne postoji zaseban limit primatelja.
+
+#### Najgori slučaj modula
+
+- Dvostruko glasovanje nije moguće jer governance modul nije podržan.
+- Kupnja tokenima, bodovi i ciljevi nisu definirani, pa za njih ne postoje
+  poslovna pravila ni scenariji neuspjeha.
+- Iskaznice nisu dio sustava i nije definiran postupak izdavanja druge
+  iskaznice.
+- Neuspješni pozivi, poput slanja više tokena od dostupnog salda ili
+  spaljivanja više tokena od vlastitog salda, revertiraju i ne mijenjaju
+  stanje ugovora.
 
 #### Ovlasti i odgovornost administratora
 
