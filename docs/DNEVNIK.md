@@ -39,6 +39,7 @@ greške za neuspješne slučajeve. Ne piši kod.
 - Commit: ac97c27f1dc49af14ced873c60d4485a074041f8
 
 NALAZ | ODLUKA | OBRAZLOŽENJE
+|---|---|---|---|
 1. Nisu definirana pravila za prazno ime, prazan studij, prazan hash, predugačke stringove, nevažeći datum ili budući datum. Vlasnik može izdati formalno neupotrebljivu diplomu. | Prihvaćeno | Za svaki ulaz definirati validaciju: prazne vrijednosti, maksimalne duljine, format/hash duljinu i dopušteni raspon datuma, uz zaseban neuspješan test.
 2. Svaka osoba koja zna ID može dobiti osobne podatke studenta. Specifikacija ne razmatra privatnost, curenje podataka ni mogućnost pogađanja sekvencijalnih ID-jeva. | Prihvaćeno | Kada se izda diploma i bilo koja osoba pozove getDiploma za ID-jeve 1 do nextDiplomaId - 1. Tada je očekivano javno otkrivanje podataka izričito potvrđeno ili je pristup ograničen.
 3. Poruka tvrdi da je diploma „važeća” i „autentična”, iako se provjerava samo postojanje ID-a, bez PDF-a, potpisa ili statusa opoziva. Bilo koji postojeći zapis može biti označen autentičnim. | Odbijeno | Ako postoji, znači da je autentična jer se zapis ne može postaviti ako nisu upisane sve vrijednosti koje se traže.
