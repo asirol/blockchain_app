@@ -64,3 +64,13 @@ Pravila:- jedan it() po kriteriju tokena, naziv počinje oznakom kriterija (npr.
 - Commit: 
 - Testova: 12, prolazi: 12
 - Mutacijska provjera: Simulirao sam uklanjanje `require(amount <= balanceOf(msg.sender), "Nemate dovoljno tokena za spaljivanje.");` iz funkcije `burn`. Pao je test `K9: odbija burn veci od vlastitog salda`, jer više ne bi vrijedio zahtjev za točnom porukom o nedovoljnom saldu.
+
+## Objava na lokalnoj mreži
+- Adresa ugovora: `0x5fbdb2315678afecb367f032d93f642f64180aa3`
+- Hash transakcije: `0x245817745a8487d5af3f38712aea0d44694f28b7c4c72955bcca2c9d48ba6d35`
+- Blok: `1`
+- Gas: `1.963.119`
+
+- Objava ugovora troši gas jer je transakcija koja mijenja stanje blockchaina: stvara se novi ugovor i pohranjuje njegov kod i početno stanje. Čitanje salda je `view` poziv koji ne mijenja stanje i zato ne troši gas.
+- Druga transakcija `postaviAdministratora` u ovom ugovoru nije izvršena jer `DiplomaChain` nema tu funkciju. Općenito bi takva transakcija trošila puno manje gasa od objave jer samo mijenja jednu vrijednost u već postojećem ugovoru, dok objava pohranjuje cijeli njegov bytecode.
+- Ako se ugasi `npx hardhat node`, lokalna mreža i njezino stanje prestaju biti dostupni. Nakon ponovnog pokretanja kreira se nova lokalna mreža, pa prethodno objavljeni ugovor više nije tamo dostupan.
