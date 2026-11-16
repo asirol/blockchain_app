@@ -1,7 +1,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { HARDHAT_CHAIN_ID } from '../contracts/diplomaChain'
 
-const SEPOLIA_CHAIN_ID = '0xaa36a7'
+const LOCAL_CHAIN_ID = HARDHAT_CHAIN_ID
 const DEFAULT_RECIPIENT_ADDRESS = '0x20226D6Cee6c55E262B30037E407011b97D82711'
 const DEFAULT_AMOUNT_ETH = '0.00001'
 
@@ -14,7 +15,7 @@ function getMetaMaskProvider() {
 function amountToWeiHex(amount) {
   const normalizedAmount = String(amount).trim()
   if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalizedAmount)) {
-    throw new Error('Unesite ispravan iznos u Sepolia ETH.')
+    throw new Error('Unesite ispravan iznos u lokalnom ETH-u.')
   }
 
   const [wholePart, fractionPart = ''] = normalizedAmount.split('.')
@@ -36,7 +37,7 @@ export const useWalletStore = defineStore('wallet', () => {
 
   const isInstalled = computed(() => Boolean(getMetaMaskProvider()))
   const isConnected = computed(() => Boolean(account.value))
-  const isSepolia = computed(() => chainId.value === SEPOLIA_CHAIN_ID)
+  const isLocalhost = computed(() => chainId.value === LOCAL_CHAIN_ID)
   const shortAccount = computed(() => account.value ? `${account.value.slice(0, 6)}...${account.value.slice(-4)}` : '')
 
   async function refresh() {
@@ -47,13 +48,26 @@ export const useWalletStore = defineStore('wallet', () => {
     account.value = accounts[0] || ''
   }
 
-  async function switchToSepolia() {
+  async function switchToLocalhost() {
     const provider = getMetaMaskProvider()
     if (!provider) throw new Error('MetaMask nije instaliran.')
-    await provider.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: SEPOLIA_CHAIN_ID }],
-    })
+    try {
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: LOCAL_CHAIN_ID }],
+      })
+    } catch (switchError) {
+      if (switchError.code !== 4902) throw switchError
+      await provider.request({
+        method: 'wallet_addEthereumChain',
+        params: [{
+          chainId: LOCAL_CHAIN_ID,
+          chainName: 'Hardhat Localhost',
+          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+          rpcUrls: ['http://127.0.0.1:8545'],
+        }],
+      })
+    }
     await refresh()
   }
 
@@ -71,7 +85,7 @@ export const useWalletStore = defineStore('wallet', () => {
       const accounts = await provider.request({ method: 'eth_requestAccounts' })
       account.value = accounts[0] || ''
       await refresh()
-      if (!isSepolia.value) await switchToSepolia()
+      if (!isLocalhost.value) await switchToLocalhost()
       error.value = ''
     } catch (connectionError) {
       if (connectionError.code === -32002) {
@@ -86,7 +100,7 @@ export const useWalletStore = defineStore('wallet', () => {
 
   async function sendDemoTransaction(recipient, amount) {
     if (!isConnected.value) throw new Error('Najprije povežite MetaMask.')
-    if (!isSepolia.value) await switchToSepolia()
+    if (!isLocalhost.value) await switchToLocalhost()
     if (!/^0x[a-fA-F0-9]{40}$/.test(recipient)) throw new Error('Unesite ispravnu Ethereum adresu primatelja.')
     const value = amountToWeiHex(amount)
 
@@ -129,7 +143,7 @@ export const useWalletStore = defineStore('wallet', () => {
 
   return {
     account, chainId, isConnecting, isSending, error, lastTransactionHash,
-    isInstalled, isConnected, isSepolia, shortAccount, connect, switchToSepolia,
+    isInstalled, isConnected,     isLocalhost, shortAccount, connect, switchToLocalhost,
     sendDemoTransaction, clearError,
     defaultRecipientAddress: DEFAULT_RECIPIENT_ADDRESS,
     defaultAmountEth: DEFAULT_AMOUNT_ETH,

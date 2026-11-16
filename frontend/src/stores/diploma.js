@@ -1,14 +1,13 @@
 ﻿import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { getBrowserProvider, getContract, hashPdf } from '../contracts/diplomaChain'
 
 export const useDiplomaStore = defineStore('diplomas', () => {
   const activeProfile = ref('fakultet')
-  const diplomas = ref([
-    { id: 'DPL-2024-0842', student: 'Ana Kovac', program: 'Racunarstvo', issued: '12. lip 2024.', pdf: 'diploma-ana-kovac.pdf', status: 'Potvrđena', hash: '0x7f...c921' },
-    { id: 'DPL-2024-0841', student: 'Marko Babic', program: 'Ekonomija', issued: '10. lip 2024.', pdf: 'diploma-marko-babic.pdf', status: 'Potvrđena', hash: '0x91...ab04' },
-    { id: 'DPL-2024-0840', student: 'Ivana Juric', program: 'Dizajn', issued: '08. lip 2024.', pdf: 'diploma-ivana-juric.pdf', status: 'Potvrđena', hash: '0xaa...210f' },
-    { id: 'DPL-2024-0839', student: 'Luka Maric', program: 'Strojarstvo', issued: '05. lip 2024.', pdf: 'diploma-luka-maric.pdf', status: 'Potvrđena', hash: '0x32...e87b' },
-  ])
+  const diplomas = ref([])
+  const isLoading = ref(false)
+  const error = ref('')
+  const lastTransactionHash = ref('')
 
   const verifiedCount = computed(() => diplomas.value.filter((diploma) => diploma.status === 'Potvrđena').length)
   const isFaculty = computed(() => activeProfile.value === 'fakultet')
@@ -17,17 +16,78 @@ export const useDiplomaStore = defineStore('diplomas', () => {
     activeProfile.value = profile
   }
 
-  function addDiploma(diploma) {
-    diplomas.value.unshift({
-      ...diploma,
-      id: `DPL-2024-${String(842 + diplomas.value.length + 1).padStart(4, '0')}`,
-      issued: diploma.issued,
-      pdf: diploma.pdf.name,
-      pdfUrl: URL.createObjectURL(diploma.pdf),
-      status: 'Potvrđena',
-      hash: '0x--...----',
-    })
+  async function loadDiplomas(ethereum) {
+    if (!ethereum) return
+    isLoading.value = true
+    error.value = ''
+    try {
+      const contract = getContract(getBrowserProvider(ethereum))
+      const nextId = Number(await contract.nextDiplomaId())
+      const loaded = []
+      for (let id = 1; id < nextId; id += 1) {
+        const [studentName, studyName, issueDate, pdfHash] = await contract.getDiploma(id)
+        loaded.push({
+          id: String(id),
+          student: studentName,
+          program: studyName,
+          issued: new Date(Number(issueDate) * 1000).toISOString().slice(0, 10),
+          pdf: `diploma-${id}.pdf`,
+          status: 'Potvrđena',
+          hash: pdfHash,
+        })
+      }
+      diplomas.value = loaded.reverse()
+    } catch (loadError) {
+      error.value = loadError.shortMessage || loadError.message || 'Diplome nije moguce ucitati.'
+    } finally {
+      isLoading.value = false
+    }
   }
 
-  return { diplomas, verifiedCount, isFaculty, activeProfile, switchProfile, addDiploma }
+  async function issueDiploma(ethereum, diploma) {
+    if (!ethereum) throw new Error('Najprije povežite MetaMask.')
+    isLoading.value = true
+    error.value = ''
+    try {
+      const provider = getBrowserProvider(ethereum)
+      const signer = await provider.getSigner()
+      const contract = getContract(signer)
+      const pdfHash = await hashPdf(diploma.pdf)
+      const transaction = await contract.issueDiploma(
+        diploma.student,
+        diploma.program,
+        Math.floor(new Date(`${diploma.issued}T00:00:00Z`).getTime() / 1000),
+        pdfHash,
+      )
+      lastTransactionHash.value = transaction.hash
+      await transaction.wait()
+      await loadDiplomas(ethereum)
+      return transaction.hash
+    } catch (issueError) {
+      error.value = issueError.shortMessage || issueError.message || 'Izdavanje diplome nije uspjelo.'
+      throw issueError
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function verifyDiploma(ethereum, id) {
+    if (!ethereum) throw new Error('MetaMask nije instaliran.')
+    const contract = getContract(getBrowserProvider(ethereum))
+    const [studentName, studyName, issueDate, pdfHash] = await contract.getDiploma(id)
+    return {
+      id: String(id),
+      student: studentName,
+      program: studyName,
+      issued: new Date(Number(issueDate) * 1000).toISOString().slice(0, 10),
+      pdf: `diploma-${id}.pdf`,
+      status: 'Potvrđena',
+      hash: pdfHash,
+    }
+  }
+
+  return {
+    diplomas, verifiedCount, isFaculty, activeProfile, isLoading, error, lastTransactionHash,
+    switchProfile, loadDiplomas, issueDiploma, verifyDiploma,
+  }
 })
