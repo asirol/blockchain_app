@@ -157,6 +157,23 @@ kriterijima potpuno se podudaraju s porukama u ugovoru.
 - **Tada:** Vrijednosti su `DiplomaChain`, `DPLC`, `18` i
   `1.000.000 * 10^18`, a cijela pocetna kolicina pripada vlasniku.
 
+## Tablica sljedivosti
+
+| Kriterij | Test |
+|---|---|
+| K1 | `K1: uspjesno izdaje diplomu, povecava brojac i emitira dogadaj` |
+| K2 | `K2: odbija izdavanje diplome s duplikatom hasha i ne mijenja brojac` |
+| K3 | `K3: odbija neovlasteno izdavanje i prijenos vlasnistva` |
+| K4 | `K4: bilo koji korisnik cita postojecu diplomu` |
+| K5 | `K5: odbija citanje nepostojece diplome` |
+| K6 | `K6: javna provjera koristi samo ID i ne zahtijeva transakciju` |
+| K7 | `K7: vlasnik prenosi tokene i emitira Transfer` |
+| K8 | `K8: vlasnik spaljuje vlastite tokene` |
+| K9 | `K9: odbija burn veci od vlastitog salda` |
+| K10 | `K10: prenosi vlasnistvo i emitira OwnershipTransferred` |
+| K11 | `K11: neuspjesno neovlasteno izdavanje ostavlja brojac i stanje nepromijenjenima` |
+| K12 | `K12: postavlja pocetne ERC-20 parametre i saldo vlasnika` |
+
 ## Mreza i ogranicenja
 
 - Ciljana mreza je Sepolia s chain ID-em `11155111`.

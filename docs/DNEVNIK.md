@@ -54,9 +54,13 @@ greške za neuspješne slučajeve. Ne piši kod.
 
 ## T4 —  (16.11.2026.)
 - Cilj termina: Preseliti token u Hardhat, alat u kojem se pametni ugovori razvijaju profesionalno: kod se kompajlira, testira automatski i objavljuje jednom naredbom.
-- Najkorisniji prompt (kopiran u cijelosti):
-- Što je AI napravio dobro: 
-- Što je AI napravio drugačije nego što sam očekivao:
+- Najkorisniji prompt (kopiran u cijelosti): U docs/SPEC.md su kriteriji prihvaćanja za token (K1, K2, ...), a u contracts/DiplomaChain.sol je ugovor. Napiši Hardhat 3 testove u test/DiplomaChain.test.js: JavaScript (ne TypeScript), ESM, mocha + chai, ethers v6, na početku: import { network } from "hardhat"; const { ethers } = await network.connect();
+Pravila:- jedan it() po kriteriju tokena, naziv počinje oznakom kriterija (npr. "K3: 
+...");- za neuspješne kriterije koristi revertedWith s točnom porukom iz ugovora;- za događaje koristi emit(...).withArgs(...);- svaki test sam priprema stanje u beforeEach, bez ovisnosti o drugim testovima;- ne mijenjaj ugovor; ako kriterij nije moguće testirati,napiši to kao komentar.
+- Što je AI napravio dobro: Iz prve je napravio sve što je trebalo i radilo je kako treba, a prije toga je pitao za potvrdu. 
+- Što je AI napravio drugačije nego što sam očekivao: Sam je i pokrenuo testiranja.
 - Što sam dodao u AGENTS.md: Danas ništa
-- Provjera: 
+- Provjera: Pokrenula sam `npx hardhat test`
 - Commit: 
+- Testova: 12, prolazi: 12
+- Mutacijska provjera: Simulirao sam uklanjanje `require(amount <= balanceOf(msg.sender), "Nemate dovoljno tokena za spaljivanje.");` iz funkcije `burn`. Pao je test `K9: odbija burn veci od vlastitog salda`, jer više ne bi vrijedio zahtjev za točnom porukom o nedovoljnom saldu.
