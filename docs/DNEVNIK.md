@@ -51,3 +51,12 @@ greške za neuspješne slučajeve. Ne piši kod.
 | K12 — decimale tokena | S računa vlasnika pozvala sam `decimals()` | `18` | `"18"` |
 | K3/K7 — ovlasti za transfer | S drugog računa pozvala sam `transfer()` | Poziv ne uspijeva uz poruku `"Pristup odbijen: samo vlasnik ugovora moze izvrsiti ovu radnju."` | `"Pristup odbijen: samo vlasnik ugovora moze izvrsiti ovu radnju."` |
 | K8/K9 — burn iznad salda | S računa vlasnika pozvala sam `burn()` s iznosom većim od salda | Poziv ne uspijeva uz poruku `"Nemate dovoljno tokena za spaljivanje."` | `"Nemate dovoljno tokena za spaljivanje."` |
+
+## T4 —  (16.11.2026.)
+- Cilj termina: Preseliti token u Hardhat, alat u kojem se pametni ugovori razvijaju profesionalno: kod se kompajlira, testira automatski i objavljuje jednom naredbom.
+- Najkorisniji prompt (kopiran u cijelosti):
+- Što je AI napravio dobro: 
+- Što je AI napravio drugačije nego što sam očekivao:
+- Što sam dodao u AGENTS.md: Danas ništa
+- Provjera: 
+- Commit: 

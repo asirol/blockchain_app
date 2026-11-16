@@ -8,3 +8,4 @@ artifacts/
 coverage/
 typechain-types/
 .DS_Store
+types/
