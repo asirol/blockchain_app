@@ -61,7 +61,7 @@ Pravila:- jedan it() po kriteriju tokena, naziv počinje oznakom kriterija (npr.
 - Što je AI napravio drugačije nego što sam očekivao: Sam je i pokrenuo testiranja.
 - Što sam dodao u AGENTS.md: Danas ništa
 - Provjera: Pokrenula sam `npx hardhat test`
-- Commit: 
+- Commit: c1e4271065123a7700a2be4fa89c628bbd743dd7
 - Testova: 12, prolazi: 12
 - Mutacijska provjera: Simulirao sam uklanjanje `require(amount <= balanceOf(msg.sender), "Nemate dovoljno tokena za spaljivanje.");` iz funkcije `burn`. Pao je test `K9: odbija burn veci od vlastitog salda`, jer više ne bi vrijedio zahtjev za točnom porukom o nedovoljnom saldu.
 
