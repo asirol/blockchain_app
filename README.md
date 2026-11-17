@@ -31,4 +31,4 @@ npm run dev
 ```
 
 Frontend sada koristi ABI ugovora i stvarne pozive `issueDiploma` i `getDiploma`.
-Izdavanje je moguće samo MetaMask računom koji je owner deployanog ugovora.
+Izdavanje je moguće samo MetaMask računom koji je owner deployanog ugovora. 
