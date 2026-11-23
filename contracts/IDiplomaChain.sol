@@ -45,6 +45,18 @@ interface IDiplomaChainModul {
             bytes32 pdfHash
         );
 
+    // Uloga: bilo koji korisnik, bez novcanika; provjera PDF datoteke po hashu.
+    function getDiplomaByHash(bytes32 pdfHash)
+        external
+        view
+        returns (
+            uint256 diplomaId,
+            string memory studentName,
+            string memory studyName,
+            uint256 issueDate,
+            bytes32 storedPdfHash
+        );
+
     // Uloga: bilo koji korisnik; SPEC: K1, K11.
     function nextDiplomaId() external view returns (uint256);
 

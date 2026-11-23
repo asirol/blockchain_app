@@ -1,25 +1,33 @@
-﻿<script setup>
+<script setup>
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useDiplomaStore } from './stores/diploma'
 import { useWalletStore } from './stores/wallet'
 
 const store = useDiplomaStore()
 const wallet = useWalletStore()
-const activeView = ref('Pregled')
+const isFacultyRoute = ref(window.location.pathname.replace(/\/+$/, '') === '/fakultet')
+const activeView = computed(() => isFacultyRoute.value ? 'Fakultetski pristup' : 'Javna provjera')
 const showIssueModal = ref(false)
 const showCalendar = ref(false)
 const calendarRef = ref(null)
 const showAllDiplomas = ref(false)
 const copiedDiplomaId = ref('')
 let copyFeedbackTimeout
-const verificationId = ref('')
+const verificationPdf = ref(null)
 const verificationResult = ref(null)
 const verificationError = ref('')
 const isVerifying = ref(false)
 const issueError = ref('')
 const form = ref({ student: '', program: '', issued: '', pdf: null })
-const showProfileMenu = ref(false)
-const isFaculty = computed(() => store.isFaculty)
+const studyNamePattern = /^[A-ZČĆĐŠŽ]+ - \S(?:.*\S)?$/u
+const isStudyNameValid = computed(() => studyNamePattern.test(form.value.program))
+const isContractOwner = computed(() => Boolean(
+  wallet.account
+  && store.ownerAddress
+  && wallet.account.toLowerCase() === store.ownerAddress.toLowerCase(),
+))
+const hasFacultyAccess = computed(() => isContractOwner.value && wallet.isLocalhost)
+const canIssueDiploma = hasFacultyAccess
 const showWalletPanel = ref(false)
 const transactionSent = ref(false)
 const transactionForm = ref({
@@ -28,6 +36,9 @@ const transactionForm = ref({
 })
 
 const calendarMonth = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+const todayLabel = new Intl.DateTimeFormat('hr-HR', { dateStyle: 'full' }).format(new Date())
+const today = new Date()
+const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 const monthFormatter = new Intl.DateTimeFormat('hr-HR', { month: 'long', year: 'numeric' })
 const weekDays = ['Po', 'Ut', 'Sr', 'Če', 'Pe', 'Su', 'Ne']
 const calendarDays = computed(() => {
@@ -53,25 +64,37 @@ const calendarMonthLabel = computed(() => {
 async function verifyDiploma() {
   verificationError.value = ''
   verificationResult.value = null
-  if (!/^\d+$/.test(verificationId.value.trim())) {
-    verificationResult.value = { invalid: true }
+  if (!verificationPdf.value) {
+    verificationError.value = 'Odaberite PDF datoteku za provjeru.'
     return
   }
   isVerifying.value = true
   try {
-    verificationResult.value = await store.verifyDiploma(window.ethereum, verificationId.value.trim())
+    verificationResult.value = await store.verifyDiplomaPdf(verificationPdf.value)
   } catch (error) {
-    verificationResult.value = { invalid: true }
-    verificationError.value = error.shortMessage || error.message || 'Provjera diplome nije uspjela.'
+    const message = error.reason
+      || error.info?.error?.message
+      || error.shortMessage
+      || error.message
+      || 'Provjera PDF-a nije uspjela.'
+    if (message.includes('Diploma s tim hashom ne postoji.')) {
+      verificationResult.value = { invalid: true }
+    } else {
+      verificationError.value = message
+    }
   } finally {
     isVerifying.value = false
   }
 }
 
 async function issueDiploma() {
-  if (!isFaculty.value) return
-  if (!form.value.student || !form.value.program || !form.value.issued || !form.value.pdf) return
+  if (!hasFacultyAccess.value) return
   issueError.value = ''
+  if (!isStudyNameValid.value) {
+    issueError.value = 'Studij unesite u obliku FIPU - Informatika, s kraticom fakulteta velikim slovima.'
+    return
+  }
+  if (!form.value.student || !form.value.issued || !form.value.pdf) return
   try {
     await store.issueDiploma(window.ethereum, form.value)
     form.value = { student: '', program: '', issued: '', pdf: null }
@@ -101,6 +124,12 @@ function changeCalendarMonth(offset) {
 
 function selectPdf(event) {
   form.value.pdf = event.target.files?.[0] || null
+}
+
+function selectVerificationPdf(event) {
+  verificationPdf.value = event.target.files?.[0] || null
+  verificationResult.value = null
+  verificationError.value = ''
 }
 
 function closeAllDiplomas() {
@@ -135,6 +164,7 @@ function handleCalendarOutsideClick(event) {
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('mousedown', handleCalendarOutsideClick)
+  store.loadDiplomas()
 })
 
 onBeforeUnmount(() => {
@@ -143,85 +173,20 @@ onBeforeUnmount(() => {
   clearTimeout(copyFeedbackTimeout)
 })
 
-function downloadDiploma(diploma) {
-  if (diploma.pdfUrl) {
-    const link = document.createElement('a')
-    link.href = diploma.pdfUrl
-    link.download = diploma.pdf
-    link.click()
-    return
-  }
-
-  function exportReport() {
-    const header = 'Student,Studij,Datum izdavanja,PDF,Status'
-    const rows = store.diplomas.map((diploma) => [diploma.student, diploma.program, diploma.issued, diploma.pdf, diploma.status]
-      .map((value) => `"${String(value).replaceAll('"', '""')}"`)
-      .join(','))
-    const url = URL.createObjectURL(new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8' }))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'izvjestaj-diploma-chain.csv'
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
-  function focusVerifier() {
-    document.getElementById('verification-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
-
-  const pdfContent = `%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
-endobj
-4 0 obj
-<< /Length 55 >>
-stream
-BT /F1 18 Tf 72 720 Td (DiplomaChain - digitalna diploma) Tj ET
-endstream
-endobj
-5 0 obj
-<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
-endobj
-trailer
-<< /Root 1 0 R >>
-%%EOF`
-  const url = URL.createObjectURL(new Blob([pdfContent], { type: 'application/pdf' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = diploma.pdf
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
 function formatIssuedDate(value) {
   if (!value || !value.includes('-')) return value
   const [year, month, day] = value.split('-')
   return `${day}.${month}.${year}.`
 }
 
-function switchProfile(profile) {
-  store.switchProfile(profile)
-  activeView.value = profile === 'fakultet' ? 'Pregled' : 'Pretraži diplome'
-  verificationResult.value = null
-  verificationId.value = ''
-  showProfileMenu.value = false
-}
-
 async function connectWallet() {
-  if (!isFaculty.value) return
+  if (!isFacultyRoute.value) return
   showWalletPanel.value = true
   await wallet.connect()
-  await store.loadDiplomas(window.ethereum)
 }
 
 async function sendDemoTransaction() {
-  if (!isFaculty.value) return
+  if (!hasFacultyAccess.value) return
   transactionSent.value = false
   const recipient = transactionForm.value.recipient.trim()
   const amount = transactionForm.value.amount.trim()
@@ -253,26 +218,17 @@ async function sendDemoTransaction() {
           </div>
         </div>
         <div class="ml-auto flex shrink-0 items-center gap-4 sm:gap-5">
-          <button v-if="isFaculty" @click="wallet.isConnected ? showWalletPanel = !showWalletPanel : connectWallet()" :disabled="wallet.isConnecting" class="flex items-center gap-2 rounded-xl border border-[#dbe6f5] bg-[#f8fbff] px-3 py-2 text-xs font-bold text-[#1d4ed8] transition hover:border-[#93b4e8] disabled:cursor-wait disabled:opacity-60">
+          <button v-if="isFacultyRoute && hasFacultyAccess" @click="showWalletPanel = !showWalletPanel" class="flex items-center gap-2 rounded-xl border border-[#dbe6f5] bg-[#f8fbff] px-3 py-2 text-xs font-bold text-[#1d4ed8] transition hover:border-[#93b4e8]">
             <span class="h-2 w-2 rounded-full" :class="wallet.isConnected && wallet.isLocalhost ? 'bg-[#48b989]' : 'bg-[#d89244]'"></span>
-            {{ wallet.isConnecting ? 'Čekanje MetaMaska...' : (wallet.isConnected ? wallet.shortAccount : 'Poveži MetaMask') }}
+            {{ wallet.shortAccount }}
           </button>
-          <div class="relative border-l border-[#e8eef6] pl-5">
-            <button @click="showProfileMenu = !showProfileMenu" class="flex items-center gap-2">
-              <div class="grid h-8 w-8 place-items-center rounded-full bg-[#e8f0ff] text-xs font-bold text-[#2563eb]">{{ isFaculty ? 'FA' : 'KO' }}</div>
-              <span class="hidden text-xs font-semibold text-[#334155] sm:block">{{ isFaculty ? 'Fakultet' : 'Korisnik' }}</span>
-              <svg class="h-3 w-3 text-[#94a3b8]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
-            </button>
-            <div v-if="showProfileMenu" class="absolute right-0 top-11 z-30 w-48 rounded-xl border border-[#e5ebf5] bg-white p-2 shadow-soft">
-              <p class="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">Promijeni profil</p>
-              <button @click="switchProfile('fakultet')" class="flex w-full items-center rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#334155] hover:bg-[#eff6ff]">Fakultet <span v-if="isFaculty" class="ml-auto text-[#2563eb]">✓</span></button>
-              <button @click="switchProfile('korisnik')" class="flex w-full items-center rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#334155] hover:bg-[#eff6ff]">Korisnik <span v-if="!isFaculty" class="ml-auto text-[#2563eb]">✓</span></button>
-            </div>
-          </div>
+          <a :href="isFacultyRoute ? '/' : '/fakultet'" class="rounded-xl border border-[#dbe6f5] bg-[#f8fbff] px-3 py-2 text-xs font-bold text-[#1d4ed8] transition hover:border-[#93b4e8]">
+            {{ isFacultyRoute ? 'Javna provjera' : 'Pristup za fakultet' }}
+          </a>
         </div>
       </header>
 
-      <div v-if="isFaculty && showWalletPanel" class="border-b border-[#dce7f4] bg-[#f7faff] px-6 py-4 sm:px-10">
+      <div v-if="isFacultyRoute && hasFacultyAccess && showWalletPanel" class="border-b border-[#dce7f4] bg-[#f7faff] px-6 py-4 sm:px-10">
         <div class="mx-auto flex max-w-[1320px] flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-[#2563eb]">MetaMask wallet</p>
@@ -291,64 +247,94 @@ async function sendDemoTransaction() {
             <button v-else @click="sendDemoTransaction" :disabled="wallet.isSending || !wallet.isLocalhost" class="rounded-xl bg-[#2563eb] px-4 py-3 text-xs font-bold text-white shadow-blue transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50">
               {{ wallet.isSending ? 'Čekanje potvrde...' : 'Pošalji demo transakciju' }}
             </button>
-            <a v-if="wallet.lastTransactionHash" :href="`https://sepolia.etherscan.io/tx/${wallet.lastTransactionHash}`" target="_blank" rel="noreferrer" class="text-xs font-bold text-[#2563eb]">Otvori na Etherscanu ↗</a>
+            <p v-if="wallet.lastTransactionHash" class="max-w-[320px] break-all text-[10px] text-[#64748b]">Hash lokalne transakcije: {{ wallet.lastTransactionHash }}</p>
           </div>
         </div>
         <p v-if="transactionSent" class="mx-auto mt-3 max-w-[1320px] text-xs font-semibold text-[#328861]">Transakcija je poslana na lokalnu Hardhat mrežu.</p>
         <p v-if="wallet.error" class="mx-auto mt-3 max-w-[1320px] text-xs font-semibold text-[#b85d73]">{{ wallet.error }}</p>
       </div>
 
-      <template v-if="isFaculty">
+      <template v-if="isFacultyRoute">
+        <section v-if="!hasFacultyAccess" class="mx-auto max-w-[680px] px-5 py-16 sm:px-10">
+          <div class="shadow-soft rounded-2xl border border-[#e5ebf5] bg-white p-8 text-center">
+            <p class="mb-2 text-[11px] font-bold uppercase tracking-[0.15em] text-[#2563eb]">Fakultetski pristup</p>
+            <h1 class="font-display text-2xl font-bold text-[#172b4d]">Prijava za fakultet</h1>
+            <p class="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#64748b]">
+              Za pristup povežite MetaMask račun koji je vlasnik ovog ugovora. DiplomaChain provjerit će račun i mrežu prije prikaza fakultetskog sučelja.
+            </p>
+            <button @click="connectWallet" :disabled="wallet.isConnecting" class="mt-6 rounded-xl bg-[#2563eb] px-5 py-3 text-xs font-bold text-white shadow-blue transition hover:bg-[#1d4ed8] disabled:cursor-wait disabled:opacity-60">
+              {{ wallet.isConnecting ? 'Čekanje MetaMaska...' : 'Poveži MetaMask za pristup' }}
+            </button>
+            <a v-if="!wallet.isInstalled" href="https://metamask.io/download/" target="_blank" rel="noreferrer" class="ml-3 text-xs font-bold text-[#2563eb] hover:text-[#1d4ed8]">Instaliraj MetaMask</a>
+            <p v-if="wallet.account && !isContractOwner" class="mt-4 text-xs font-semibold text-[#b85d73]">
+              Povezani račun nije vlasnik ugovora.<span v-if="store.ownerAddress" class="mt-1 block font-mono">Vlasnik: {{ store.ownerAddress }}</span>
+            </p>
+            <p v-else-if="isContractOwner && !wallet.isLocalhost" class="mt-4 text-xs font-semibold text-[#b85d73]">Odaberite Hardhat Localhost mrežu u MetaMasku.</p>
+            <p v-if="wallet.error" class="mt-4 text-xs font-semibold text-[#b85d73]">{{ wallet.error }}</p>
+            <p v-if="store.error" class="mt-4 text-xs font-semibold text-[#b85d73]">{{ store.error }}</p>
+            <a href="/" class="mt-6 inline-block text-xs font-bold text-[#2563eb] hover:text-[#1d4ed8]">Povratak na javnu provjeru diploma</a>
+          </div>
+        </section>
+        <template v-else>
       <div class="mx-auto max-w-[1480px] px-5 py-8 sm:px-10 xl:px-16">
         <section class="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-          <div><p class="mb-2 text-[11px] font-bold uppercase tracking-[0.15em] text-[#2563eb]">Utorak, 18. lipnja 2024.</p><h1 class="font-display text-[30px] font-bold tracking-tight text-[#172b4d]">Dobrodošli</h1><p class="mt-2 text-sm text-[#64748b]">Pregledajte i izdajte digitalne diplome svoje ustanove.</p></div>
-          <button @click="openIssueModal" class="flex items-center justify-center gap-2 rounded-xl bg-[#2563eb] px-5 py-3 text-xs font-bold text-white shadow-blue transition hover:bg-[#1d4ed8]"><span class="text-base">+</span> Izdaj novu diplomu</button>
+          <div><p class="mb-2 text-[11px] font-bold uppercase tracking-[0.15em] text-[#2563eb]">{{ todayLabel }}</p><h1 class="font-display text-[30px] font-bold tracking-tight text-[#172b4d]">Dobrodošli</h1><p class="mt-2 text-sm text-[#64748b]">Pregledajte i izdajte digitalne diplome svoje ustanove.</p></div>
+          <button @click="openIssueModal" :disabled="!canIssueDiploma || store.isLoading" class="flex items-center justify-center gap-2 rounded-xl bg-[#2563eb] px-5 py-3 text-xs font-bold text-white shadow-blue transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50"><span class="text-base">+</span> Izdaj novu diplomu</button>
         </section>
+        <p v-if="store.error" class="mb-5 rounded-xl border border-[#f2cad4] bg-[#fff7f8] px-4 py-3 text-xs font-semibold text-[#b85d73]">{{ store.error }}</p>
+        <p v-else-if="!canIssueDiploma" class="mb-5 rounded-xl border border-[#dbe6f5] bg-white px-4 py-3 text-xs text-[#64748b]">
+          Za izdavanje povežite MetaMask na Hardhat Localhost računom vlasnika ugovora.
+          <span v-if="store.ownerAddress" class="font-mono">Vlasnik: {{ store.ownerAddress }}</span>
+        </p>
 
         <section class="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
-          <div class="shadow-soft rounded-2xl border border-[#e5ebf5] bg-white p-5"><div class="mb-5 flex items-start justify-between"><span class="rounded-lg bg-[#e8f0ff] p-2 text-[#2563eb]"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg></span><span class="rounded-full bg-[#edfaf4] px-2 py-1 text-[10px] font-bold text-[#4db88a]">+12.5%</span></div><p class="text-[11px] font-semibold text-[#64748b]">Ukupno izdanih diploma</p><p class="mt-1 font-display text-2xl font-bold text-[#172b4d]">{{ store.diplomas.length + 127 }}</p></div>
-          <div class="shadow-soft rounded-2xl border border-[#e5ebf5] bg-white p-5"><div class="mb-5 flex items-start justify-between"><span class="rounded-lg bg-[#e8f0ff] p-2 text-[#2563eb]"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6"/></svg></span><span class="text-[10px] font-bold text-[#a1a0b3]">Ukupno</span></div><p class="text-[11px] font-semibold text-[#64748b]">Potrošeno za blockchain gas</p><p class="mt-1 font-display text-2xl font-bold text-[#172b4d]">0.42 ETH</p></div>
+          <div class="shadow-soft rounded-2xl border border-[#e5ebf5] bg-white p-5"><div class="mb-5 flex items-start justify-between"><span class="rounded-lg bg-[#e8f0ff] p-2 text-[#2563eb]"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 0 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg></span></div><p class="text-[11px] font-semibold text-[#64748b]">Ukupno izdanih diploma</p><p class="mt-1 font-display text-2xl font-bold text-[#172b4d]">{{ store.issuedDiplomaCount ?? '—' }}</p></div>
+          <div class="shadow-soft rounded-2xl border border-[#e5ebf5] bg-white p-5"><div class="mb-5 flex items-start justify-between"><span class="rounded-lg bg-[#e8f0ff] p-2 text-[#2563eb]"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6"/></svg></span></div><p class="text-[11px] font-semibold text-[#64748b]">Ukupni gas za izdavanje diploma</p><p class="mt-1 font-display text-2xl font-bold text-[#172b4d]">{{ store.totalIssuanceGasEth === null ? '—' : `${store.totalIssuanceGasEth} ETH` }}</p></div>
         </section>
 
         <div class="grid gap-6 xl:grid-cols-[1.45fr_1fr]">
           <section class="shadow-soft rounded-2xl border border-[#e5ebf5] bg-white p-6">
             <div class="mb-6 flex items-center justify-between"><div><h2 class="font-display text-base font-bold text-[#1e3a5f]">Nedavne diplome</h2><p class="mt-1 text-xs text-[#64748b]">Najnovije vjerodajnice vaše ustanove.</p></div><button @click="showAllDiplomas = true" class="text-xs font-bold text-[#2563eb]">Prikaži sve <span class="ml-1">→</span></button></div>
-            <div class="overflow-x-auto"><table class="w-full min-w-[680px] text-left"><thead><tr class="border-b border-[#eaf0f7] text-[10px] uppercase tracking-wider text-[#94a3b8]"><th class="pb-3 font-bold">Student</th><th class="pb-3 font-bold">ID</th><th class="pb-3 font-bold">Studij</th><th class="pb-3 font-bold">Izdano</th><th class="pb-3 font-bold">PDF</th></tr></thead><tbody><tr v-for="diploma in store.diplomas" :key="diploma.id" class="border-b border-[#f1f5f9] last:border-0"><td class="py-4 text-xs font-semibold text-[#334155]">{{ diploma.student }}</td><td class="py-4"><button type="button" @click="copyDiplomaId(diploma.id)" :aria-label="copiedDiplomaId === diploma.id ? `ID diplome ${diploma.id} je kopiran` : `Kopiraj ID diplome ${diploma.id}`" aria-live="polite" class="font-mono text-[9px] font-normal text-[#2563eb] hover:text-[#1d4ed8]">{{ copiedDiplomaId === diploma.id ? 'Kopirano' : diploma.id }}</button></td><td class="py-4 text-xs text-[#64748b]">{{ diploma.program }}</td><td class="py-4 text-xs text-[#64748b]">{{ formatIssuedDate(diploma.issued) }}</td><td class="py-4"><button @click="downloadDiploma(diploma)" class="text-xs font-bold text-[#2563eb] hover:text-[#1d4ed8]">Preuzmi PDF</button></td></tr></tbody></table></div>
+            <div v-if="store.isLoading && !store.diplomas.length" class="py-8 text-center text-xs text-[#64748b]">Ucitavanje diploma s blockchaina...</div><div v-else-if="!store.diplomas.length" class="py-8 text-center text-xs text-[#64748b]">Jos nema izdanih diploma na ugovoru.</div><div v-else class="overflow-x-auto"><table class="w-full min-w-[560px] text-left"><thead><tr class="border-b border-[#eaf0f7] text-[10px] uppercase tracking-wider text-[#94a3b8]"><th class="pb-3 font-bold">Student</th><th class="pb-3 font-bold">ID</th><th class="pb-3 font-bold">Studij</th><th class="pb-3 font-bold">Izdano</th></tr></thead><tbody><tr v-for="diploma in store.diplomas" :key="diploma.id" class="border-b border-[#f1f5f9] last:border-0"><td class="py-4 text-xs font-semibold text-[#334155]">{{ diploma.student }}</td><td class="py-4"><button type="button" @click="copyDiplomaId(diploma.id)" :aria-label="copiedDiplomaId === diploma.id ? `ID diplome ${diploma.id} je kopiran` : `Kopiraj ID diplome ${diploma.id}`" aria-live="polite" class="font-mono text-[9px] font-normal text-[#2563eb] hover:text-[#1d4ed8]">{{ copiedDiplomaId === diploma.id ? 'Kopirano' : diploma.id }}</button></td><td class="py-4 text-xs text-[#64748b]">{{ diploma.program }}</td><td class="py-4 text-xs text-[#64748b]">{{ formatIssuedDate(diploma.issued) }}</td></tr></tbody></table></div>
           </section>
-          <section id="verification-card" class="relative overflow-hidden rounded-2xl bg-[#12325b] p-6 text-white"><div class="absolute -right-10 -top-10 h-44 w-44 rounded-full border border-[#4d6f9c] opacity-40"></div><div class="absolute -bottom-20 -right-3 h-48 w-48 rounded-full border border-[#4d6f9c] opacity-30"></div><div class="relative"><div class="mb-7 flex items-center justify-between"><div class="grid h-9 w-9 place-items-center rounded-xl bg-[#2563eb]"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3.5h8l4 4V20.5H6z" stroke-linejoin="round"/><path d="M14 3.5v4h4M8.5 12.5l2.2 2.2 4.8-4.8" stroke-linecap="round" stroke-linejoin="round"/></svg>          </div><span class="rounded-full border border-[#44668f] px-2.5 py-1 text-[9px] font-bold text-[#c4d5eb]">HARDHAT LOCALHOST</span></div><h2 class="font-display text-xl font-bold">Provjeri diplomu</h2><p class="mt-2 max-w-[270px] text-xs leading-5 text-[#c4d5eb]">Odmah provjerite je li vjerodajnica autentična i nepromijenjena.</p><div class="mt-7 flex gap-2 rounded-xl bg-white/10 p-1.5"><input v-model="verificationId" @keyup.enter="verifyDiploma" placeholder="Unesite ID diplome..." class="min-w-0 flex-1 bg-transparent px-2 text-xs text-white outline-none placeholder:text-[#9db4d1]" /><button @click="verifyDiploma" :disabled="isVerifying" class="rounded-lg bg-white px-3 py-2 text-[10px] font-bold text-[#1d4ed8]">{{ isVerifying ? 'Provjera...' : 'Provjeri' }}</button></div><div v-if="verificationResult" class="mt-3 rounded-lg bg-white/10 p-3 text-xs"><span v-if="!verificationResult.invalid" class="text-[#8ee2bd]">✓ Pronađena je autentična diploma: {{ verificationResult.student }}</span><span v-else class="text-[#ffabbc]">ID nije pronađen. Provjerite unos i pokušajte ponovno.</span></div><p v-if="verificationError" class="mt-2 text-xs text-[#ffabbc]">{{ verificationError }}</p></div></section>
+          <section id="verification-card" class="relative overflow-hidden rounded-2xl bg-[#12325b] p-6 text-white"><div class="absolute -right-10 -top-10 h-44 w-44 rounded-full border border-[#4d6f9c] opacity-40"></div><div class="absolute -bottom-20 -right-3 h-48 w-48 rounded-full border border-[#4d6f9c] opacity-30"></div><div class="relative"><div class="mb-7 flex items-center justify-between"><div class="grid h-9 w-9 place-items-center rounded-xl bg-[#2563eb]"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3.5h8l4 4V20.5H6z" stroke-linejoin="round"/><path d="M14 3.5v4h4M8.5 12.5l2.2 2.2 4.8-4.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span class="rounded-full border border-[#44668f] px-2.5 py-1 text-[9px] font-bold text-[#c4d5eb]">HARDHAT LOCALHOST</span></div><h2 class="font-display text-xl font-bold">Provjeri PDF diplome</h2><p class="mt-2 max-w-[270px] text-xs leading-5 text-[#c4d5eb]">Učitajte PDF. Njegov hash uspoređuje se sa zapisima na ugovoru.</p><div class="mt-5 flex flex-col gap-2"><input type="file" accept="application/pdf" @change="selectVerificationPdf" class="block w-full text-xs text-white file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-xs file:font-bold file:text-[#1d4ed8]" /><span v-if="verificationPdf" class="truncate text-[10px] text-[#c4d5eb]">{{ verificationPdf.name }}</span><button @click="verifyDiploma" :disabled="isVerifying || !verificationPdf" class="cursor-pointer self-start rounded-lg bg-white px-3 py-2 text-[10px] font-bold text-[#1d4ed8] disabled:opacity-50">{{ isVerifying ? 'Provjera...' : 'Provjeri PDF' }}</button></div><div v-if="verificationResult" class="mt-3 rounded-lg bg-white/10 p-3 text-xs"><span v-if="!verificationResult.invalid" class="text-[#8ee2bd]">✓ Hash PDF-a odgovara izdanoj diplomi (ID {{ verificationResult.id }}).</span><span v-else class="text-[#ffabbc]">PDF s ovim hashom nije pronađen na ugovoru.</span></div><p v-if="verificationError && verificationResult?.invalid !== true" class="mt-2 text-xs text-[#ffabbc]">{{ verificationError }}</p></div></section>
         </div>
 
       </div>
-      <div v-if="showAllDiplomas" class="fixed inset-0 z-20 grid place-items-center overflow-y-auto bg-[#172b4d]/40 p-4 backdrop-blur-sm sm:p-6" @click.self="closeAllDiplomas">
-        <div role="dialog" aria-modal="true" aria-labelledby="all-diplomas-title" class="my-auto w-full max-w-[1180px] rounded-2xl bg-[#f7f8fc] p-5 shadow-2xl sm:p-8">
+      <div v-if="showAllDiplomas" class="fixed inset-0 z-20 grid place-items-center overflow-y-auto bg-[#172b4d]/40 p-4 backdrop-blur-sm sm:p-6 cursor-pointer" @click.self="closeAllDiplomas">
+        <div role="dialog" aria-modal="true" aria-labelledby="all-diplomas-title" class="my-auto w-full max-w-[1180px] rounded-2xl bg-[#f7f8fc] p-5 shadow-2xl sm:p-8 cursor-default">
           <div class="mb-6 flex items-start justify-between gap-4">
             <div><p class="text-[11px] font-bold uppercase tracking-[0.15em] text-[#2563eb]">Fakultet</p><h2 id="all-diplomas-title" class="font-display text-2xl font-bold text-[#1e3a5f]">Sve diplome</h2><p class="mt-1 text-xs text-[#64748b]">Pregled svih izdanih vjerodajnica vaše ustanove.</p></div>
             <button @click="closeAllDiplomas" aria-label="Zatvori pregled svih diploma" class="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-xl text-[#94a3b8] transition hover:bg-white hover:text-[#2563eb]">×</button>
           </div>
-          <div class="overflow-x-auto rounded-2xl border border-[#e5ebf5] bg-white shadow-soft"><table class="w-full min-w-[760px] text-left"><thead><tr class="border-b border-[#eaf0f7] text-[10px] uppercase tracking-wider text-[#94a3b8]"><th class="p-4 font-bold">Student</th><th class="p-4 font-bold">ID</th><th class="p-4 font-bold">Studij</th><th class="p-4 font-bold">Izdano</th><th class="p-4 font-bold">PDF</th></tr></thead><tbody><tr v-for="diploma in store.diplomas" :key="`all-${diploma.id}`" class="border-b border-[#f1f5f9] last:border-0"><td class="p-4 text-xs font-semibold text-[#334155]">{{ diploma.student }}</td><td class="p-4"><button type="button" @click="copyDiplomaId(diploma.id)" :aria-label="copiedDiplomaId === diploma.id ? `ID diplome ${diploma.id} je kopiran` : `Kopiraj ID diplome ${diploma.id}`" aria-live="polite" class="font-mono text-[9px] font-normal text-[#2563eb] hover:text-[#1d4ed8]">{{ copiedDiplomaId === diploma.id ? 'Kopirano' : diploma.id }}</button></td><td class="p-4 text-xs text-[#64748b]">{{ diploma.program }}</td><td class="p-4 text-xs text-[#64748b]">{{ formatIssuedDate(diploma.issued) }}</td><td class="p-4"><button @click="downloadDiploma(diploma)" class="text-xs font-bold text-[#2563eb] hover:text-[#1d4ed8]">Preuzmi PDF</button></td></tr></tbody></table></div>
+          <div class="overflow-x-auto rounded-2xl border border-[#e5ebf5] bg-white shadow-soft"><table class="w-full min-w-[640px] text-left"><thead><tr class="border-b border-[#eaf0f7] text-[10px] uppercase tracking-wider text-[#94a3b8]"><th class="p-4 font-bold">Student</th><th class="p-4 font-bold">ID</th><th class="p-4 font-bold">Studij</th><th class="p-4 font-bold">Izdano</th></tr></thead><tbody><tr v-for="diploma in store.diplomas" :key="`all-${diploma.id}`" class="border-b border-[#f1f5f9] last:border-0"><td class="p-4 text-xs font-semibold text-[#334155]">{{ diploma.student }}</td><td class="p-4"><button type="button" @click="copyDiplomaId(diploma.id)" :aria-label="copiedDiplomaId === diploma.id ? `ID diplome ${diploma.id} je kopiran` : `Kopiraj ID diplome ${diploma.id}`" aria-live="polite" class="font-mono text-[9px] font-normal text-[#2563eb] hover:text-[#1d4ed8]">{{ copiedDiplomaId === diploma.id ? 'Kopirano' : diploma.id }}</button></td><td class="p-4 text-xs text-[#64748b]">{{ diploma.program }}</td><td class="p-4 text-xs text-[#64748b]">{{ formatIssuedDate(diploma.issued) }}</td></tr></tbody></table></div>
         </div>
       </div>
+      </template>
       </template>
 
       <div v-else class="mx-auto max-w-[920px] px-5 py-10 sm:px-10 lg:px-14">
         <section class="mb-8">
           <p class="mb-2 text-[11px] font-bold uppercase tracking-[0.15em] text-[#2563eb]">Provjera vjerodajnica</p>
           <h1 class="font-display text-[30px] font-bold tracking-tight text-[#172b4d]">Pretražite diplomu</h1>
-          <p class="mt-2 max-w-xl text-sm text-[#64748b]">Unesite ID diplome kako biste provjerili njezinu autentičnost na blockchainu.</p>
+          <p class="mt-2 max-w-xl text-sm text-[#64748b]">Učitajte PDF diplome kako bi se njegov hash usporedio sa zapisima na blockchainu.</p>
         </section>
         <section class="shadow-soft rounded-2xl border border-[#e5ebf5] bg-white p-6 sm:p-8">
-          <div class="mb-6 flex items-center gap-3"><div class="grid h-10 w-10 place-items-center rounded-xl bg-[#e8f0ff] text-[#2563eb]">⌕</div><div><h2 class="font-display text-base font-bold text-[#1e3a5f]">Pretraži diplomu</h2><p class="mt-1 text-xs text-[#64748b]">Provjera je dostupna svim korisnicima.</p></div></div>
-          <div class="flex flex-col gap-3 sm:flex-row"><input v-model="verificationId" @keyup.enter="verifyDiploma" placeholder="ID diplome" class="min-w-0 flex-1 rounded-xl border border-[#dbe6f5] px-4 py-3 text-sm outline-none focus:border-[#60a5fa]" /><button @click="verifyDiploma" class="rounded-xl bg-[#2563eb] px-6 py-3 text-xs font-bold text-white shadow-blue transition hover:bg-[#1d4ed8]">Provjeri diplomu</button></div>
+          <div class="mb-6 flex items-center gap-3"><div class="grid h-10 w-10 place-items-center rounded-xl bg-[#e8f0ff] text-[#2563eb]">⌕</div><div><h2 class="font-display text-base font-bold text-[#1e3a5f]">Provjeri PDF diplome</h2><p class="mt-1 text-xs text-[#64748b]">PDF se obrađuje lokalno; datoteka se ne šalje na blockchain.</p></div></div>
+          <div class="flex flex-col gap-3 sm:flex-row"><input type="file" accept="application/pdf" @change="selectVerificationPdf" class="min-w-0 flex-1 rounded-xl border border-[#dbe6f5] px-4 py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-[#e8f0ff] file:px-3 file:py-2 file:text-xs file:font-bold file:text-[#2563eb]" /><button @click="verifyDiploma" :disabled="isVerifying || !verificationPdf" class="cursor-pointer rounded-xl bg-[#2563eb] px-6 py-3 text-xs font-bold text-white shadow-blue transition hover:bg-[#1d4ed8] disabled:opacity-50">{{ isVerifying ? 'Provjera...' : 'Provjeri PDF' }}</button></div>
           <div v-if="verificationResult" :class="verificationResult.invalid ? 'border-[#f2cad4] bg-[#fff7f8] text-[#b85d73]' : 'border-[#bce8d4] bg-[#f3fcf7] text-[#328861]'" class="mt-5 rounded-xl border p-4 text-sm">
-            <strong v-if="!verificationResult.invalid" class="block">Diploma je autentična</strong><strong v-else class="block">Diploma nije pronađena</strong>
-            <span v-if="!verificationResult.invalid" class="mt-1 block text-xs">Student: {{ verificationResult.student }} · Studij: {{ verificationResult.program }}</span><button v-if="!verificationResult.invalid" @click="downloadDiploma(verificationResult)" class="mt-3 text-xs font-bold text-[#2563eb] hover:text-[#1d4ed8]">Preuzmi PDF diplome</button><span v-else class="mt-1 block text-xs">Provjerite ID i pokušajte ponovno.</span>
+            <strong v-if="!verificationResult.invalid" class="block">Hash PDF-a odgovara zapisu na ugovoru</strong><strong v-else class="block">PDF nije pronađen na ugovoru</strong>
+            <span v-if="!verificationResult.invalid" class="mt-1 block text-xs">ID: {{ verificationResult.id }} · Student: {{ verificationResult.student }} · Studij: {{ verificationResult.program }} · Izdano: {{ formatIssuedDate(verificationResult.issued) }}</span>
+            <span v-if="!verificationResult.invalid" class="mt-2 block break-all text-xs">Hash: {{ verificationResult.hash }}</span>
+            <span v-else class="mt-1 block text-xs">Datoteka mora biti točno ista kao ona korištena pri izdavanju.</span>
           </div>
+          <p v-if="verificationError && !verificationResult" class="mt-3 text-xs text-[#b85d73]">{{ verificationError }}</p>
         </section>
       </div>
     </main>
 
-    <div v-if="showIssueModal && isFaculty" class="fixed inset-0 z-30 grid place-items-center overflow-y-auto bg-[#172b4d]/40 p-5 backdrop-blur-sm">
-      <div class="max-h-[calc(100vh-2.5rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-7 shadow-2xl"><div class="mb-6 flex items-start justify-between"><div><h2 class="font-display text-xl font-bold text-[#1e3a5f]">Izdaj novu diplomu</h2><p class="mt-1 text-xs text-[#64748b]">Vjerodajnica će biti zabilježena na lokalnoj Hardhat mreži.</p></div><button @click="showIssueModal = false; showCalendar = false" aria-label="Zatvori modal" class="text-xl text-[#94a3b8]">×</button></div><label class="mb-2 block text-xs font-bold text-[#475569]">Ime i prezime studenta</label><input v-model="form.student" class="mb-4 w-full rounded-xl border border-[#dbe6f5] px-4 py-3 text-sm outline-none focus:border-[#60a5fa]" placeholder="Ime i prezime" /><label class="mb-2 block text-xs font-bold text-[#475569]">Naziv studija / smjera</label><input v-model="form.program" class="mb-4 w-full rounded-xl border border-[#dbe6f5] px-4 py-3 text-sm outline-none focus:border-[#60a5fa]" placeholder="Naziv studija / smjera" /><label class="mb-2 block text-xs font-bold text-[#475569]">Datum izdavanja</label><div ref="calendarRef" class="relative mb-4"><button type="button" @click="showCalendar = !showCalendar" :aria-expanded="showCalendar" aria-haspopup="dialog" class="flex w-full items-center justify-between rounded-xl border border-[#93b4e8] bg-[#f8fbff] px-4 py-3 text-left text-sm font-semibold text-[#2563eb] outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#dbeafe]"><span>{{ form.issued || 'Odaberi datum' }}</span><span aria-hidden="true">▾</span></button><div v-if="showCalendar" role="dialog" aria-label="Odabir datuma" class="absolute left-0 right-0 top-full z-40 mt-2 rounded-2xl border border-[#dbeafe] bg-white p-4 shadow-xl"><div class="mb-4 flex items-center justify-between"><button type="button" @click="changeCalendarMonth(-1)" aria-label="Prethodni mjesec" class="grid h-8 w-8 place-items-center rounded-lg text-lg font-bold text-[#2563eb] hover:bg-[#eff6ff]">‹</button><strong class="text-sm text-[#1e3a5f]">{{ calendarMonthLabel }}</strong><button type="button" @click="changeCalendarMonth(1)" aria-label="Sljedeci mjesec" class="grid h-8 w-8 place-items-center rounded-lg text-lg font-bold text-[#2563eb] hover:bg-[#eff6ff]">›</button></div><div class="mb-2 grid grid-cols-7 text-center text-[10px] font-bold uppercase text-[#94a3b8]"><span v-for="day in weekDays" :key="day">{{ day }}</span></div><div class="grid grid-cols-7 gap-1" role="grid"><span v-for="(date, index) in calendarDays" :key="date || `empty-${index}`" class="grid aspect-square place-items-center"><button v-if="date" type="button" @click="selectIssuedDate(date)" :aria-label="`Odaberi ${date}`" :aria-pressed="form.issued === date" class="grid h-8 w-8 place-items-center rounded-lg text-xs font-semibold transition hover:bg-[#dbeafe] focus:outline-none focus:ring-2 focus:ring-[#60a5fa]" :class="form.issued === date ? 'bg-[#2563eb] text-white hover:bg-[#1d4ed8]' : 'text-[#334155]'">{{ Number(date.slice(-2)) }}</button></span></div></div></div><label class="mb-2 block text-xs font-bold text-[#475569]">PDF diplome</label><input id="pdf-upload" @change="selectPdf" type="file" accept="application/pdf" class="hidden" /><label for="pdf-upload" class="mb-6 flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#93b4e8] bg-[#f8fbff] px-4 py-3 text-sm font-semibold text-[#2563eb] transition hover:border-[#2563eb] hover:bg-[#eff6ff]"><span class="truncate">{{ form.pdf ? form.pdf.name : 'Odaberi PDF datoteku' }}</span><span class="shrink-0 rounded-lg bg-[#e8f0ff] px-3 py-2 text-xs font-bold text-[#2563eb]">Odaberi</span></label>      <p v-if="issueError" class="mb-3 text-xs font-semibold text-[#b85d73]">{{ issueError }}</p><div class="flex justify-end gap-3"><button @click="showIssueModal = false; showCalendar = false" class="rounded-xl px-4 py-3 text-xs font-bold text-[#64748b]">Odustani</button><button @click="issueDiploma" :disabled="store.isLoading" class="rounded-xl bg-[#2563eb] px-5 py-3 text-xs font-bold text-white shadow-blue disabled:cursor-wait disabled:opacity-60">{{ store.isLoading ? 'Čekanje potvrde...' : 'Izdaj diplomu' }}</button></div></div>
+    <div v-if="showIssueModal && isFacultyRoute && hasFacultyAccess" class="fixed inset-0 z-30 grid place-items-center overflow-y-auto bg-[#172b4d]/40 p-5 backdrop-blur-sm">
+      <div class="max-h-[calc(100vh-2.5rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-7 shadow-2xl"><div class="mb-6 flex items-start justify-between"><div><h2 class="font-display text-xl font-bold text-[#1e3a5f]">Izdaj novu diplomu</h2><p class="mt-1 text-xs text-[#64748b]">Vjerodajnica će biti zabilježena na lokalnoj Hardhat mreži.</p></div><button @click="showIssueModal = false; showCalendar = false" aria-label="Zatvori modal" class="text-xl text-[#94a3b8]">×</button></div><label class="mb-2 block text-xs font-bold text-[#475569]">Ime i prezime studenta</label><input v-model="form.student" class="mb-4 w-full rounded-xl border border-[#dbe6f5] px-4 py-3 text-sm outline-none focus:border-[#60a5fa]" placeholder="Ime i prezime" /><label class="mb-2 block text-xs font-bold text-[#475569]">Naziv studija / smjera</label><input v-model="form.program" :aria-invalid="form.program && !isStudyNameValid ? 'true' : undefined" class="mb-1 w-full rounded-xl border border-[#dbe6f5] px-4 py-3 text-sm outline-none focus:border-[#60a5fa]" placeholder="FIPU - Informatika" /><p class="mb-4 text-xs text-[#64748b]">Format: kratica fakulteta velikim slovima, razmak, crtica, razmak i naziv smjera.</p><label class="mb-2 block text-xs font-bold text-[#475569]">Datum izdavanja</label><div ref="calendarRef" class="relative mb-4"><button type="button" @click="showCalendar = !showCalendar" :aria-expanded="showCalendar" aria-haspopup="dialog" class="flex w-full items-center justify-between rounded-xl border border-[#93b4e8] bg-[#f8fbff] px-4 py-3 text-left text-sm font-semibold text-[#2563eb] outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#dbeafe]"><span>{{ form.issued || 'Odaberi datum' }}</span><span aria-hidden="true">▾</span></button><div v-if="showCalendar" role="dialog" aria-label="Odabir datuma" class="absolute left-0 right-0 top-full z-40 mt-2 rounded-2xl border border-[#dbeafe] bg-white p-4 shadow-xl"><div class="mb-4 flex items-center justify-between"><button type="button" @click="changeCalendarMonth(-1)" aria-label="Prethodni mjesec" class="grid h-8 w-8 place-items-center rounded-lg text-lg font-bold text-[#2563eb] hover:bg-[#eff6ff]">‹</button><strong class="text-sm text-[#1e3a5f]">{{ calendarMonthLabel }}</strong><button type="button" @click="changeCalendarMonth(1)" aria-label="Sljedeci mjesec" class="grid h-8 w-8 place-items-center rounded-lg text-lg font-bold text-[#2563eb] hover:bg-[#eff6ff]">›</button></div><div class="mb-2 grid grid-cols-7 text-center text-[10px] font-bold uppercase text-[#94a3b8]"><span v-for="day in weekDays" :key="day">{{ day }}</span></div><div class="grid grid-cols-7 gap-1" role="grid"><span v-for="(date, index) in calendarDays" :key="date || `empty-${index}`" class="grid aspect-square place-items-center"><button v-if="date" type="button" @click="selectIssuedDate(date)" :aria-label="`Odaberi ${date}`" :aria-pressed="form.issued === date" :aria-current="date === todayDate ? 'date' : undefined" class="grid h-8 w-8 place-items-center rounded-lg text-xs font-semibold transition hover:bg-[#dbeafe] focus:outline-none focus:ring-2 focus:ring-[#60a5fa]" :class="form.issued === date ? 'bg-[#2563eb] text-white hover:bg-[#1d4ed8]' : date === todayDate ? 'border border-[#2563eb] bg-[#eff6ff] text-[#2563eb]' : 'text-[#334155]'">{{ Number(date.slice(-2)) }}</button></span></div></div></div><label class="mb-2 block text-xs font-bold text-[#475569]">PDF diplome</label><input id="pdf-upload" @change="selectPdf" type="file" accept="application/pdf" class="hidden" /><label for="pdf-upload" class="mb-6 flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#93b4e8] bg-[#f8fbff] px-4 py-3 text-sm font-semibold text-[#2563eb] transition hover:border-[#2563eb] hover:bg-[#eff6ff]"><span class="truncate">{{ form.pdf ? form.pdf.name : 'Odaberi PDF datoteku' }}</span><span class="shrink-0 rounded-lg bg-[#e8f0ff] px-3 py-2 text-xs font-bold text-[#2563eb]">Odaberi</span></label>      <p v-if="issueError" class="mb-3 text-xs font-semibold text-[#b85d73]">{{ issueError }}</p><div class="flex justify-end gap-3"><button @click="showIssueModal = false; showCalendar = false" class="rounded-xl px-4 py-3 text-xs font-bold text-[#64748b]">Odustani</button><button @click="issueDiploma" :disabled="store.isLoading" class="rounded-xl bg-[#2563eb] px-5 py-3 text-xs font-bold text-white shadow-blue disabled:cursor-wait disabled:opacity-60">{{ store.isLoading ? 'Čekanje potvrde...' : 'Izdaj diplomu' }}</button></div></div>
     </div>
   </div>
 </template>

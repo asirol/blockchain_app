@@ -19,6 +19,7 @@ contract DiplomaChain is
     uint256 private _nextDiplomaId = 1;
 
     error OwnershipRenunciationDisabled();
+    error InvalidStudyNameFormat();
 
     struct Diploma {
         string studentName;
@@ -29,7 +30,7 @@ contract DiplomaChain is
     }
 
     mapping(uint256 diplomaId => Diploma) private _diplomas;
-    mapping(bytes32 pdfHash => bool) private _usedPdfHashes;
+    mapping(bytes32 pdfHash => uint256 diplomaId) private _diplomaIdsByPdfHash;
 
     // K12.
     constructor() ERC20("DiplomaChain", "DPLC") Ownable(msg.sender) {
@@ -157,8 +158,11 @@ contract DiplomaChain is
             msg.sender == owner(),
             "Pristup odbijen: samo vlasnik ugovora moze izvrsiti ovu radnju."
         );
+        if (!_isValidStudyName(studyName)) {
+            revert InvalidStudyNameFormat();
+        }
         require(
-            !_usedPdfHashes[pdfHash],
+            _diplomaIdsByPdfHash[pdfHash] == 0,
             "Diploma s tim hashom vec postoji. Nije moguce izdati duplikat."
         );
 
@@ -170,7 +174,7 @@ contract DiplomaChain is
             pdfHash: pdfHash,
             exists: true
         });
-        _usedPdfHashes[pdfHash] = true;
+        _diplomaIdsByPdfHash[pdfHash] = diplomaId;
         _nextDiplomaId++;
 
         emit DiplomaIssued(
@@ -180,6 +184,79 @@ contract DiplomaChain is
             issueDate,
             pdfHash
         );
+    }
+
+    function _isValidStudyName(string calldata studyName)
+        private
+        pure
+        returns (bool)
+    {
+        bytes calldata value = bytes(studyName);
+        uint256 index;
+
+        while (index < value.length) {
+            if (
+                value[index] == 0x20
+                    && index + 2 < value.length
+                    && value[index + 1] == 0x2d
+                    && value[index + 2] == 0x20
+            ) {
+                if (index == 0 || index + 3 == value.length) {
+                    return false;
+                }
+
+                uint256 firstNameByte = index + 3;
+                uint256 lastNameByte = value.length - 1;
+                if (
+                    value[firstNameByte] == 0x20
+                        || value[firstNameByte] == 0x09
+                        || value[firstNameByte] == 0x0a
+                        || value[firstNameByte] == 0x0d
+                        || value[lastNameByte] == 0x20
+                        || value[lastNameByte] == 0x09
+                        || value[lastNameByte] == 0x0a
+                        || value[lastNameByte] == 0x0d
+                ) {
+                    return false;
+                }
+
+                for (uint256 nameIndex = index + 3; nameIndex < value.length; nameIndex++) {
+                    if (value[nameIndex] != 0x20 && value[nameIndex] != 0x09) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            if (value[index] >= 0x41 && value[index] <= 0x5a) {
+                index++;
+            } else if (
+                index + 1 < value.length
+                    && (
+                        (
+                            value[index] == 0xc4
+                                && (
+                                    value[index + 1] == 0x86
+                                        || value[index + 1] == 0x8c
+                                        || value[index + 1] == 0x90
+                                )
+                        )
+                            || (
+                                value[index] == 0xc5
+                                    && (
+                                        value[index + 1] == 0xa0
+                                            || value[index + 1] == 0xbd
+                                    )
+                            )
+                    )
+            ) {
+                index += 2;
+            } else {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     // K4, K5, K6.
@@ -200,6 +277,31 @@ contract DiplomaChain is
             "Diploma s tim ID-om ne postoji."
         );
         return (
+            diploma.studentName,
+            diploma.studyName,
+            diploma.issueDate,
+            diploma.pdfHash
+        );
+    }
+
+    function getDiplomaByHash(bytes32 pdfHash)
+        external
+        view
+        override
+        returns (
+            uint256 diplomaId,
+            string memory studentName,
+            string memory studyName,
+            uint256 issueDate,
+            bytes32 storedPdfHash
+        )
+    {
+        diplomaId = _diplomaIdsByPdfHash[pdfHash];
+        require(diplomaId != 0, "Diploma s tim hashom ne postoji.");
+
+        Diploma storage diploma = _diplomas[diplomaId];
+        return (
+            diplomaId,
             diploma.studentName,
             diploma.studyName,
             diploma.issueDate,

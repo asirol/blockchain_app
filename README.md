@@ -4,7 +4,7 @@ DiplomaChain je Web3 aplikacija za fakultete koja izdaje digitalne diplome na Se
 
 ## Frontend
 
-Frontend se nalazi u [frontend/](./frontend/) i koristi Vue 3, Vite, Pinia i Tailwind CSS. Trenutna verzija uključuje dva profila: profil Fakultet s mogućnošću izdavanja i pregleda diploma te profil Korisnik koji može samo pretraživati i provjeravati diplome pomoću njihovog ID-a.
+Frontend se nalazi u [frontend/](./frontend/) i koristi Vue 3, Vite, Pinia i Tailwind CSS. Javna provjera dostupna je na `/`, a fakultetsko sučelje na `/fakultet`. Pristup fakultetskom sučelju zahtijeva povezivanje MetaMask računa koji je vlasnik ugovora. Javna provjera ne zahtijeva novčanik.
 
 ### Pokretanje lokalnog Web3 toka
 
@@ -30,5 +30,13 @@ npm install
 npm run dev
 ```
 
-Frontend sada koristi ABI ugovora i stvarne pozive `issueDiploma` i `getDiploma`.
-Izdavanje je moguće samo MetaMask računom koji je owner deployanog ugovora. 
+Frontend sada koristi ABI ugovora i stvarne pozive `issueDiploma`, `getDiploma`
+i `getDiplomaByHash`.
+Čitanje diploma radi preko lokalnog RPC-a bez MetaMaska; MetaMask se koristi za
+transakciju izdavanja i mora biti povezan na račun vlasnika ugovora. Nakon
+deploya provjerite da `VITE_DIPLOMA_CHAIN_ADDRESS` u `frontend/.env` odgovara
+ispisanoj adresi ugovora. Početni Hardhat račun koji je deployao ugovor je vlasnik.
+Za provjeru autentičnosti učitajte istu PDF datoteku koja je korištena pri
+izdavanju; preglednik lokalno izračuna njezin hash i traži odgovarajući zapis na
+ugovoru. Datoteka se ne šalje na blockchain. Nakon izmjene pametnog ugovora
+potrebno ga je ponovno deployati i ažurirati adresu u `frontend/.env`.

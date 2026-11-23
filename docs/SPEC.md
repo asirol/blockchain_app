@@ -27,11 +27,16 @@ Ugovor koristi Solidity `^0.8.24`, OpenZeppelin Contracts 5.x i nalazi se u
 ### Modul diploma
 
 - `issueDiploma(string,string,uint256,bytes32)` vraca `uint256 diplomaId`.
+- Naziv studija mora biti u obliku `KRATICA - Naziv smjera`; kratica sadrzi
+  samo velika slova (A-Z i hrvatska slova Č, Ć, Đ, Š, Ž), a naziv smjera ne
+  smije biti prazan.
 - `getDiploma(uint256)` vraca ime studenta, studij, datum izdavanja i hash PDF-a.
+- `getDiplomaByHash(bytes32)` javno vraca ID i podatke diplome za spremljeni hash PDF-a; nepoznati hash vraca gresku `Diploma s tim hashom ne postoji.`
 - `nextDiplomaId()` pocinje od `1` i povecava se nakon uspjesnog izdavanja.
 - Isti `pdfHash` ne moze biti izdan vise puta.
 - `DiplomaIssued` sadrzi ID, podatke studenta, datum i hash.
 - Podaci diplome su javni; sirovi PDF se ne sprema na blockchain.
+- Provjera PDF-a u frontendu lokalno racuna `keccak256` cijele datoteke i usporeduje ga sa hashom ugovora; za uspjeh datoteka mora biti bajt-po-bajt ista.
 
 ### Vlasnistvo
 
@@ -173,6 +178,7 @@ kriterijima potpuno se podudaraju s porukama u ugovoru.
 | K10 | `K10: prenosi vlasnistvo i emitira OwnershipTransferred` |
 | K11 | `K11: neuspjesno neovlasteno izdavanje ostavlja brojac i stanje nepromijenjenima` |
 | K12 | `K12: postavlja pocetne ERC-20 parametre i saldo vlasnika` |
+| Provjera PDF-a | `PDF provjera: javno pronalazi diplomu po hashu datoteke`; `PDF provjera: odbija nepoznati hash` |
 
 ## Mreza i ogranicenja
 

@@ -15,7 +15,8 @@
 
 body { margin: 0; min-width: 320px; }
 button, input { font: inherit; }
-button:not(:disabled), a, select:not(:disabled), input[type="date"], label[for] { cursor: pointer; }
+button:not(:disabled), a[href], select:not(:disabled), input[type="date"], input[type="file"], label[for], [role="button"] { cursor: pointer; }
+input[type="file"]::file-selector-button, input[type="file"]::-webkit-file-upload-button { cursor: pointer; }
 button:not(:disabled), a, select:not(:disabled), input[type="date"], label[for] {
   transition:
     color 180ms ease,
