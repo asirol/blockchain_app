@@ -180,4 +180,10 @@ describe("DiplomaChain", function () {
     expect(await diplomaChain.totalSupply()).to.equal(initialSupply);
     expect(await diplomaChain.balanceOf(owner.address)).to.equal(initialSupply);
   });
+
+  it("S1: odbija renounceOwnership i zadrzava postojeceg vlasnika", async function () {
+    await expect(diplomaChain.renounceOwnership()).to.be.revert(ethers);
+
+    expect(await diplomaChain.owner()).to.equal(owner.address);
+  });
 });
