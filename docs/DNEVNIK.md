@@ -74,3 +74,17 @@ Pravila:- jedan it() po kriteriju tokena, naziv počinje oznakom kriterija (npr.
 - Objava ugovora troši gas jer je transakcija koja mijenja stanje blockchaina: stvara se novi ugovor i pohranjuje njegov kod i početno stanje. Čitanje salda je `view` poziv koji ne mijenja stanje i zato ne troši gas.
 - Druga transakcija `postaviAdministratora` u ovom ugovoru nije izvršena jer `DiplomaChain` nema tu funkciju. Općenito bi takva transakcija trošila puno manje gasa od objave jer samo mijenja jednu vrijednost u već postojećem ugovoru, dok objava pohranjuje cijeli njegov bytecode.
 - Ako se ugasi `npx hardhat node`, lokalna mreža i njezino stanje prestaju biti dostupni. Nakon ponovnog pokretanja kreira se nova lokalna mreža, pa prethodno objavljeni ugovor više nije tamo dostupan.
+
+## T5 —  (23.11.2026.)
+- Cilj termina: Sigurnosni pregled prije pametnog ugovora
+- Najkorisniji prompt (kopiran u cijelosti): 
+- Što je AI napravio dobro:  
+- Što je AI napravio drugačije nego što sam očekivao: 
+- Što sam dodao u AGENTS.md: Danas ništa
+- Provjera: `npx.cmd hardhat run scripts/tajne.js` — skripta uspješno ispisuje slotove 0–5.
+- Prepoznati slotovi: slot 2 sadrži ukupnu količinu tokena (`10^24` osnovnih jedinica), slot 3 naziv `DiplomaChain`, slot 4 simbol `DPLC`, a slot 5 adresu vlasnika ugovora (`0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266`).
+- U ugovor nikad ne spremam lozinku, kod za popust ni osobni podatak jer su podaci u blockchain memoriji javno čitljivi i trajno zapisani.
+- Usporedba tablica: Ja sam pronašla više problema: nedostaje provjera tekstualnih ulaza, postoji mogućnost prijenosa tokena uz odobrenje, javni osobni podaci se trajno zapisuju, mogućnost trajnog oduzimanja vlasništva. AI je pronašao samo posljednji problem vezan uz vlasništvo.
+- S1 prije popravka: `npx.cmd hardhat test --grep "S1:"` — 0 passing, 1 failing; `AssertionError: Expected transaction to be reverted`. `renounceOwnership` nije revertirao iako test zahtijeva da bude onemogućen.
+- Provjera nakon popravka: `npx.cmd hardhat test` — 13 passing (uključujući svih 12 testova iz Vježbe 4 i S1).
+- Commit: 
