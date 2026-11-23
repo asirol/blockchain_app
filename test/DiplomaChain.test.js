@@ -182,7 +182,11 @@ describe("DiplomaChain", function () {
   });
 
   it("S1: odbija renounceOwnership i zadrzava postojeceg vlasnika", async function () {
-    await expect(diplomaChain.renounceOwnership()).to.be.revert(ethers);
+    await expect(diplomaChain.renounceOwnership())
+      .to.be.revertedWithCustomError(
+        diplomaChain,
+        "OwnershipRenunciationDisabled"
+      );
 
     expect(await diplomaChain.owner()).to.equal(owner.address);
   });

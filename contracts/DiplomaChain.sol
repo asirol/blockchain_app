@@ -18,6 +18,8 @@ contract DiplomaChain is
     uint256 private constant INITIAL_SUPPLY = 1_000_000 * 10 ** 18;
     uint256 private _nextDiplomaId = 1;
 
+    error OwnershipRenunciationDisabled();
+
     struct Diploma {
         string studentName;
         string studyName;
@@ -54,6 +56,10 @@ contract DiplomaChain is
             "Pristup odbijen: samo vlasnik ugovora moze izvrsiti ovu radnju."
         );
         Ownable.transferOwnership(newOwner);
+    }
+
+    function renounceOwnership() public view override onlyOwner {
+        revert OwnershipRenunciationDisabled();
     }
 
     // K6, K9, K12.
