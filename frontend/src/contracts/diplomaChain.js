@@ -7,6 +7,10 @@ export const DIPLOMA_CHAIN_ADDRESS = import.meta.env.VITE_DIPLOMA_CHAIN_ADDRESS
   || '0x5FbDB2315678afecb367f032d93F642f64180aa3'
 
 export const diplomaChainAbi = [
+  'error InvalidStudyNameFormat()',
+  'error InvalidStudentName()',
+  'error InvalidIssueDate()',
+  'error InvalidPdfHash()',
   'function owner() view returns (address)',
   'function issueDiploma(string studentName, string studyName, uint256 issueDate, bytes32 pdfHash) returns (uint256 diplomaId)',
   'function getDiploma(uint256 diplomaId) view returns (string studentName, string studyName, uint256 issueDate, bytes32 pdfHash)',
@@ -80,6 +84,15 @@ function collectErrorDetails(error) {
   visit(error)
 
   for (const data of revertData) {
+    try {
+      const interfaceInstance = new ethers.Interface(diplomaChainAbi)
+      const parsed = interfaceInstance.parseError(data)
+      if (parsed) {
+        messages.unshift(parsed.name)
+      }
+    } catch {
+      // Continue with other revert formats.
+    }
     if (!data.startsWith('0x08c379a0')) continue
     try {
       const [reason] = ethers.AbiCoder.defaultAbiCoder().decode(['string'], `0x${data.slice(10)}`)
@@ -113,26 +126,38 @@ export function getDiplomaErrorMessage(error) {
   ) {
     const mismatch = expectedNonce
       ? `MetaMask je pokušao poslati nonce ${expectedNonce[2]}, ali Hardhat očekuje ${expectedNonce[1]}. `
-      : 'MetaMask i Hardhat imaju različito stanje noncea za ovaj račun. '
-    return `${mismatch}Provjerite da nema transakcije na čekanju. U MetaMasku otvorite Settings > Advanced > Clear activity and nonce (ili Reset Account) za Hardhat Localhost, zatim ponovno učitajte stranicu. To briše samo lokalnu povijest MetaMaska, ne stanje blockchaina.`
+      : 'MetaMask i Hardhat imaju različite nonce vrijednosti za ovaj račun. '
+    return `${mismatch}Provjerite ima li transakcija na čekanju. U postavkama MetaMaska otvorite Settings > Advanced > Delete activity and nonce data za mrežu Hardhat Localhost, a zatim ponovno učitajte stranicu. Time se brišu samo lokalni podaci o transakcijama u MetaMasku, a ne stanje blockchaina.`
   }
   if (/insufficient funds|funds for gas|not enough ether|exceeds the balance/.test(combined)) {
-    return 'Račun nema dovoljno ETH-a za gas ove transakcije. Provjerite stanje ETH-a na MetaMask računu koji je vlasnik ugovora.'
+    return 'Na računu nema dovoljno ETH-a za naknadu ove transakcije. Provjerite stanje ETH-a na računu u MetaMasku koji je vlasnik ugovora.'
   }
   if (/diploma s tim hashom vec postoji/.test(combined)) {
     return 'Ovaj PDF već je izdan kao diploma. Odaberite drugu datoteku.'
+  }
+  if (/invalidstudentname|ime i prezime studenta|student name/.test(combined)) {
+    return 'Unesite ime i prezime studenta.'
+  }
+  if (/invalidissuedate|buduc|future|datum izdavanja/.test(combined)) {
+    return 'Datum izdavanja ne može biti u budućnosti.'
+  }
+  if (/invalidpdfhash|pdf hash/.test(combined)) {
+    return 'Odaberite valjanu PDF datoteku.'
+  }
+  if (/invalidstudynameformat|nije u trazenom formatu/.test(combined)) {
+    return 'Naziv studija unesite u obliku: kratica fakulteta (naziv studija/smjera) - kratica stečenog naziva, npr. FIPU (Informatika) - univ. mag. inf.'
   }
   if (/pristup odbijen|samo vlasnik ugovora/.test(combined)) {
     return 'Povežite MetaMask račun koji je vlasnik ugovora da biste izdali diplomu.'
   }
   if (/mrezu pametnog ugovora|chain.?id|wrong network/.test(combined)) {
-    return 'MetaMask nije na mreži ugovora. Odaberite Hardhat Localhost (chain ID 31337).'
+    return 'MetaMask nije povezan s mrežom ugovora. Odaberite Hardhat Localhost (ID lanca 31337).'
   }
   if (/could not detect network|failed to fetch|network error|econnrefused|fetch failed/.test(combined)) {
-    return 'Nije moguće povezati se s blockchain čvorom. Provjerite radi li Hardhat node na http://127.0.0.1:8545.'
+    return 'Nije moguće povezati se s čvorom blockchaina. Provjerite radi li lokalni čvor Hardhat na http://127.0.0.1:8545.'
   }
   if (/no code|missing revert data|call exception|bad address|contract.*not deployed/.test(combined)) {
-    return 'Na ovoj adresi nije pronađen ispravan ugovor. Ponovno deployajte ugovor i provjerite VITE_DIPLOMA_CHAIN_ADDRESS u frontend/.env.'
+    return 'Na ovoj adresi nije pronađen valjan ugovor. Ponovno objavite ugovor i provjerite VITE_DIPLOMA_CHAIN_ADDRESS u frontend/.env.'
   }
   if (details) return details
 

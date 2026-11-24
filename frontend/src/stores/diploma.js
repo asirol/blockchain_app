@@ -55,11 +55,11 @@ export const useDiplomaStore = defineStore('diplomas', () => {
         transactionHashes.map((hash) => provider.getTransactionReceipt(hash)),
       )
       if (receipts.some((receipt) => !receipt)) {
-        throw new Error('Nije moguce ucitati potvrde svih transakcija izdavanja.')
+        throw new Error('Nije moguće učitati potvrde svih transakcija izdavanja.')
       }
       const totalGasWei = receipts.reduce((total, receipt) => {
         if (receipt.gasPrice == null) {
-          throw new Error('Nedostaje cijena gasa u potvrdi transakcije izdavanja.')
+          throw new Error('Nedostaje cijena naknade za transakciju izdavanja.')
         }
         return total + receipt.gasUsed * receipt.gasPrice
       }, 0n)
@@ -71,7 +71,7 @@ export const useDiplomaStore = defineStore('diplomas', () => {
       ownerAddress.value = ''
       issuedDiplomaCount.value = null
       totalIssuanceGasEth.value = null
-      error.value = loadError.shortMessage || loadError.message || 'Diplome nije moguce ucitati.'
+      error.value = loadError.shortMessage || loadError.message || 'Diplome nije moguće učitati.'
     } finally {
       isLoading.value = false
     }
@@ -85,11 +85,11 @@ export const useDiplomaStore = defineStore('diplomas', () => {
       const provider = getBrowserProvider(ethereum)
       const network = await provider.getNetwork()
       if (network.chainId !== BigInt(DIPLOMA_CHAIN_ID)) {
-        throw new Error('MetaMask nije povezan na mrežu pametnog ugovora. Odaberite Hardhat Localhost (chain ID 31337).')
+        throw new Error('MetaMask nije povezan s mrežom pametnog ugovora. Odaberite Hardhat Localhost (ID lanca 31337).')
       }
       const contractCode = await provider.getCode(DIPLOMA_CHAIN_ADDRESS)
       if (contractCode === '0x') {
-        throw new Error('Na ovoj adresi nema deployanog ugovora. Ponovno deployajte ugovor i ažurirajte VITE_DIPLOMA_CHAIN_ADDRESS u frontend/.env.')
+        throw new Error('Na ovoj adresi nije objavljen ugovor. Ponovno objavite ugovor i ažurirajte VITE_DIPLOMA_CHAIN_ADDRESS u frontend/.env.')
       }
       const signer = await provider.getSigner()
       const contract = getContract(signer)
@@ -102,6 +102,11 @@ export const useDiplomaStore = defineStore('diplomas', () => {
       const issueDate = new Date(`${diploma.issued}T00:00:00Z`)
       if (Number.isNaN(issueDate.getTime())) {
         throw new Error('Odaberite ispravan datum izdavanja diplome.')
+      }
+      const today = new Date()
+      const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      if (diploma.issued > todayIso) {
+        throw new Error('Datum izdavanja ne može biti u budućnosti.')
       }
       if (!diploma.pdf || (diploma.pdf.type && diploma.pdf.type !== 'application/pdf')) {
         throw new Error('Odabrana datoteka nije prepoznata kao PDF. Odaberite PDF datoteku.')
@@ -116,12 +121,11 @@ export const useDiplomaStore = defineStore('diplomas', () => {
       ]
 
       await contract.issueDiploma.staticCall(...issueArguments)
-      const nonce = await getReadOnlyProvider().getTransactionCount(signerAddress, 'pending')
-      const transaction = await contract.issueDiploma(...issueArguments, { nonce })
+      const transaction = await contract.issueDiploma(...issueArguments)
       lastTransactionHash.value = transaction.hash
       const receipt = await transaction.wait()
       if (!receipt || receipt.status !== 1) {
-        throw new Error('Transakcija izdavanja diplome nije uspjesno potvrdjena.')
+        throw new Error('Transakcija izdavanja diplome nije uspješno potvrđena.')
       }
       await loadDiplomas()
       return transaction.hash

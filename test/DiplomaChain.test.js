@@ -27,18 +27,18 @@ describe("DiplomaChain", function () {
     await expect(
       diplomaChain.issueDiploma(
         "Ana Anic",
-        "FER - Racunarstvo",
+        "FIPU (Racunarstvo) - univ. mag. ing. inf.",
         issueDate,
         pdfHash
       )
     )
       .to.emit(diplomaChain, "DiplomaIssued")
-      .withArgs(1n, "Ana Anic", "FER - Racunarstvo", issueDate, pdfHash);
+      .withArgs(1n, "Ana Anic", "FIPU (Racunarstvo) - univ. mag. ing. inf.", issueDate, pdfHash);
 
     expect(await diplomaChain.nextDiplomaId()).to.equal(2n);
     expect(await diplomaChain.getDiploma(1n)).to.deep.equal([
       "Ana Anic",
-      "FER - Racunarstvo",
+      "FIPU (Racunarstvo) - univ. mag. ing. inf.",
       1735689600n,
       pdfHash,
     ]);
@@ -54,12 +54,34 @@ describe("DiplomaChain", function () {
     expect(await diplomaChain.nextDiplomaId()).to.equal(1n);
   });
 
-  it("K2: odbija izdavanje diplome s duplikatom hasha i ne mijenja brojac", async function () {
-    const pdfHash = ethers.keccak256(ethers.toUtf8Bytes("pdf-k2"));
-    await diplomaChain.issueDiploma("Ivo Ivic", "PRAV - Pravo", 1735689600, pdfHash);
+  it("odbija studij bez kratica stecenog naziva", async function () {
+    const pdfHash = ethers.keccak256(ethers.toUtf8Bytes("invalid-degree-name"));
 
     await expect(
-      diplomaChain.issueDiploma("Maja Majic", "MED - Medicina", 1735689601, pdfHash)
+      diplomaChain.issueDiploma("Ana Anic", "FIPU (Informatika) - diploma", 1735689600, pdfHash)
+    ).to.be.revertedWithCustomError(diplomaChain, "InvalidStudyNameFormat");
+  });
+
+  it("odbija prazno ime, buduci datum i prazan PDF hash", async function () {
+    await expect(
+      diplomaChain.issueDiploma("", "FIPU (Informatika) - univ. mag. inf.", 1735689600, ethers.ZeroHash)
+    ).to.be.revertedWithCustomError(diplomaChain, "InvalidStudentName");
+
+    await expect(
+      diplomaChain.issueDiploma("Ana Anic", "FIPU (Informatika) - univ. mag. inf.", 4102444800, ethers.keccak256(ethers.toUtf8Bytes("future")))
+    ).to.be.revertedWithCustomError(diplomaChain, "InvalidIssueDate");
+
+    await expect(
+      diplomaChain.issueDiploma("Ana Anic", "FIPU (Informatika) - univ. mag. inf.", 1735689600, ethers.ZeroHash)
+    ).to.be.revertedWithCustomError(diplomaChain, "InvalidPdfHash");
+  });
+
+  it("K2: odbija izdavanje diplome s duplikatom hasha i ne mijenja brojac", async function () {
+    const pdfHash = ethers.keccak256(ethers.toUtf8Bytes("pdf-k2"));
+    await diplomaChain.issueDiploma("Ivo Ivic", "PRAV (Pravo) - univ. bacc. iur.", 1735689600, pdfHash);
+
+    await expect(
+      diplomaChain.issueDiploma("Maja Majic", "MEF (Medicina) - dr. med.", 1735689601, pdfHash)
     ).to.be.revertedWith(
       "Diploma s tim hashom vec postoji. Nije moguce izdati duplikat."
     );
@@ -67,7 +89,7 @@ describe("DiplomaChain", function () {
     expect(await diplomaChain.nextDiplomaId()).to.equal(2n);
     expect(await diplomaChain.getDiploma(1n)).to.deep.equal([
       "Ivo Ivic",
-      "PRAV - Pravo",
+      "PRAV (Pravo) - univ. bacc. iur.",
       1735689600n,
       pdfHash,
     ]);
@@ -79,7 +101,7 @@ describe("DiplomaChain", function () {
     await expect(
       diplomaChain
         .connect(otherUser)
-        .issueDiploma("Student", "FER - Studij", 1735689600, pdfHash)
+        .issueDiploma("Student", "FIPU (Informatika) - univ. mag. inf.", 1735689600, pdfHash)
     ).to.be.revertedWith(accessDenied);
 
     await expect(
@@ -92,14 +114,14 @@ describe("DiplomaChain", function () {
     const pdfHash = ethers.keccak256(ethers.toUtf8Bytes("pdf-k4"));
     await diplomaChain.issueDiploma(
       "Sara Saric",
-      "EFZG - Ekonomija",
+      "EFZG (Ekonomija) - univ. bacc. oec.",
       issueDate,
       pdfHash
     );
 
     expect(await diplomaChain.connect(otherUser).getDiploma(1n)).to.deep.equal([
       "Sara Saric",
-      "EFZG - Ekonomija",
+      "EFZG (Ekonomija) - univ. bacc. oec.",
       1735689600n,
       pdfHash,
     ]);
@@ -114,7 +136,7 @@ describe("DiplomaChain", function () {
     const pdfHash = ethers.keccak256(ethers.toUtf8Bytes("pdf-k6"));
     await diplomaChain.issueDiploma(
       "Luka Lukic",
-      "AF - Arhitektura",
+      "AF (Arhitektura) - univ. bacc. ing. arch.",
       1735689600,
       pdfHash
     );
@@ -123,7 +145,7 @@ describe("DiplomaChain", function () {
     const diploma = await diplomaChain.getDiploma.staticCall(1n);
     expect(diploma).to.deep.equal([
       "Luka Lukic",
-      "AF - Arhitektura",
+      "AF (Arhitektura) - univ. bacc. ing. arch.",
       1735689600n,
       pdfHash,
     ]);
@@ -134,7 +156,7 @@ describe("DiplomaChain", function () {
     const pdfHash = ethers.keccak256(ethers.toUtf8Bytes("pdf-by-hash"));
     await diplomaChain.issueDiploma(
       "Mia Matic",
-      "PMF - Biologija",
+      "PMF (Biologija) - univ. bacc. biol.",
       issueDate,
       pdfHash
     );
@@ -144,7 +166,7 @@ describe("DiplomaChain", function () {
     ).to.deep.equal([
       1n,
       "Mia Matic",
-      "PMF - Biologija",
+      "PMF (Biologija) - univ. bacc. biol.",
       BigInt(issueDate),
       pdfHash,
     ]);
@@ -203,7 +225,7 @@ describe("DiplomaChain", function () {
     await expect(
       diplomaChain
         .connect(otherUser)
-        .issueDiploma("Student", "FER - Studij", 1735689600, pdfHash)
+        .issueDiploma("Student", "FIPU (Informatika) - univ. mag. inf.", 1735689600, pdfHash)
     ).to.be.revertedWith(accessDenied);
 
     expect(await diplomaChain.nextDiplomaId()).to.equal(nextIdBefore);

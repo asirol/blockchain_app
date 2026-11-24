@@ -19,11 +19,11 @@ function amountToWeiHex(amount) {
   }
 
   const [wholePart, fractionPart = ''] = normalizedAmount.split('.')
-  if (fractionPart.length > 18) throw new Error('Iznos moze imati najvise 18 decimala.')
+  if (fractionPart.length > 18) throw new Error('Iznos može imati najviše 18 decimala.')
 
   const wei = (BigInt(wholePart || '0') * 10n ** 18n)
     + BigInt((fractionPart + '0'.repeat(18)).slice(0, 18))
-  if (wei <= 0n) throw new Error('Iznos mora biti veci od nule.')
+  if (wei <= 0n) throw new Error('Iznos mora biti veći od nule.')
   return `0x${wei.toString(16)}`
 }
 
@@ -75,7 +75,7 @@ export const useWalletStore = defineStore('wallet', () => {
     if (isConnecting.value) return
     const provider = getMetaMaskProvider()
     if (!provider) {
-      error.value = 'MetaMask nije instaliran u ovom pregledniku. Instalirajte ekstenziju i ponovno ucitajte stranicu.'
+      error.value = 'MetaMask nije instaliran u ovom pregledniku. Instalirajte proširenje i ponovno učitajte stranicu.'
       return
     }
 
@@ -89,7 +89,7 @@ export const useWalletStore = defineStore('wallet', () => {
       error.value = ''
     } catch (connectionError) {
       if (connectionError.code === -32002) {
-        error.value = 'MetaMask vec ima otvoren zahtjev za povezivanje. Potvrdite ili zatvorite taj zahtjev u MetaMask prozoru.'
+        error.value = 'MetaMask već ima otvoren zahtjev za povezivanje. Potvrdite ili zatvorite taj zahtjev u prozoru MetaMaska.'
       } else {
         error.value = connectionError.code === 4001 ? 'Povezivanje je odbijeno u MetaMasku.' : (connectionError.message || 'Povezivanje nije uspjelo.')
       }
@@ -137,7 +137,7 @@ export const useWalletStore = defineStore('wallet', () => {
     provider.on?.('accountsChanged', (accounts) => { account.value = accounts[0] || '' })
     provider.on?.('chainChanged', (nextChainId) => { chainId.value = nextChainId })
     refresh().catch((refreshError) => {
-      error.value = refreshError.message || 'MetaMask stanje nije moguce ucitati.'
+      error.value = refreshError.message || 'Nije moguće učitati stanje MetaMaska.'
     })
   }
 

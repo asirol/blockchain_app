@@ -27,9 +27,8 @@ Ugovor koristi Solidity `^0.8.24`, OpenZeppelin Contracts 5.x i nalazi se u
 ### Modul diploma
 
 - `issueDiploma(string,string,uint256,bytes32)` vraca `uint256 diplomaId`.
-- Naziv studija mora biti u obliku `KRATICA - Naziv smjera`; kratica sadrzi
-  samo velika slova (A-Z i hrvatska slova Č, Ć, Đ, Š, Ž), a naziv smjera ne
-  smije biti prazan.
+- Naziv studija mora biti u obliku `KRATICA (Naziv studija/smjera) - kratica
+  stečenog naziva`, na primjer `FIPU (Informatika) - univ. mag. inf.`.
 - `getDiploma(uint256)` vraca ime studenta, studij, datum izdavanja i hash PDF-a.
 - `getDiplomaByHash(bytes32)` javno vraca ID i podatke diplome za spremljeni hash PDF-a; nepoznati hash vraca gresku `Diploma s tim hashom ne postoji.`
 - `nextDiplomaId()` pocinje od `1` i povecava se nakon uspjesnog izdavanja.

@@ -20,6 +20,9 @@ contract DiplomaChain is
 
     error OwnershipRenunciationDisabled();
     error InvalidStudyNameFormat();
+    error InvalidStudentName();
+    error InvalidIssueDate();
+    error InvalidPdfHash();
 
     struct Diploma {
         string studentName;
@@ -158,8 +161,17 @@ contract DiplomaChain is
             msg.sender == owner(),
             "Pristup odbijen: samo vlasnik ugovora moze izvrsiti ovu radnju."
         );
+        if (bytes(studentName).length == 0) {
+            revert InvalidStudentName();
+        }
         if (!_isValidStudyName(studyName)) {
             revert InvalidStudyNameFormat();
+        }
+        if (issueDate == 0 || issueDate > block.timestamp) {
+            revert InvalidIssueDate();
+        }
+        if (pdfHash == bytes32(0)) {
+            revert InvalidPdfHash();
         }
         require(
             _diplomaIdsByPdfHash[pdfHash] == 0,
@@ -192,71 +204,71 @@ contract DiplomaChain is
         returns (bool)
     {
         bytes calldata value = bytes(studyName);
-        uint256 index;
+        uint256 openParen;
+        bool foundOpenParen;
 
-        while (index < value.length) {
-            if (
-                value[index] == 0x20
-                    && index + 2 < value.length
-                    && value[index + 1] == 0x2d
-                    && value[index + 2] == 0x20
-            ) {
-                if (index == 0 || index + 3 == value.length) {
-                    return false;
-                }
-
-                uint256 firstNameByte = index + 3;
-                uint256 lastNameByte = value.length - 1;
-                if (
-                    value[firstNameByte] == 0x20
-                        || value[firstNameByte] == 0x09
-                        || value[firstNameByte] == 0x0a
-                        || value[firstNameByte] == 0x0d
-                        || value[lastNameByte] == 0x20
-                        || value[lastNameByte] == 0x09
-                        || value[lastNameByte] == 0x0a
-                        || value[lastNameByte] == 0x0d
-                ) {
-                    return false;
-                }
-
-                for (uint256 nameIndex = index + 3; nameIndex < value.length; nameIndex++) {
-                    if (value[nameIndex] != 0x20 && value[nameIndex] != 0x09) {
-                        return true;
-                    }
-                }
-                return false;
+        for (uint256 i = 0; i < value.length; i++) {
+            if (value[i] == 0x28) {
+                openParen = i;
+                foundOpenParen = true;
+                break;
             }
+        }
+        if (!foundOpenParen || openParen < 2 || value[openParen - 1] != 0x20) {
+            return false;
+        }
 
-            if (value[index] >= 0x41 && value[index] <= 0x5a) {
-                index++;
-            } else if (
-                index + 1 < value.length
-                    && (
-                        (
-                            value[index] == 0xc4
-                                && (
-                                    value[index + 1] == 0x86
-                                        || value[index + 1] == 0x8c
-                                        || value[index + 1] == 0x90
-                                )
-                        )
-                            || (
-                                value[index] == 0xc5
-                                    && (
-                                        value[index + 1] == 0xa0
-                                            || value[index + 1] == 0xbd
-                                    )
-                            )
-                    )
-            ) {
-                index += 2;
-            } else {
+        for (uint256 i = 0; i < openParen - 1; i++) {
+            if (!(value[i] >= 0x41 && value[i] <= 0x5a)) {
                 return false;
             }
         }
 
-        return false;
+        uint256 closeParen;
+        bool foundCloseParen;
+        for (uint256 i = openParen + 1; i < value.length; i++) {
+            if (value[i] == 0x29) {
+                closeParen = i;
+                foundCloseParen = true;
+                break;
+            }
+        }
+        if (
+            !foundCloseParen
+                || closeParen == openParen + 1
+                || closeParen + 3 >= value.length
+                || value[closeParen + 1] != 0x20
+                || value[closeParen + 2] != 0x2d
+                || value[closeParen + 3] != 0x20
+        ) {
+            return false;
+        }
+
+        if (
+            value[openParen + 1] == 0x20
+                || value[closeParen - 1] == 0x20
+        ) {
+            return false;
+        }
+
+        bool foundDotInDegree;
+        for (uint256 i = closeParen + 4; i < value.length; i++) {
+            if (value[i] == 0x2e) {
+                foundDotInDegree = true;
+            } else if (
+                value[i] != 0x20
+                    && !(value[i] >= 0x30 && value[i] <= 0x39)
+                    && !(value[i] >= 0x41 && value[i] <= 0x5a)
+                    && !(value[i] >= 0x61 && value[i] <= 0x7a)
+            ) {
+                return false;
+            }
+        }
+
+        if (value[value.length - 1] == 0x20) {
+            return false;
+        }
+        return foundDotInDegree;
     }
 
     // K4, K5, K6.
